@@ -14,7 +14,6 @@ export async function logAction(
 
   // Validate target count
   const targetCount = targets.length;
-
   if (actionType.minTargets && targetCount < actionType.minTargets) {
     throw new Error(`This action requires at least ${actionType.minTargets} targets.`);
   }
@@ -34,9 +33,23 @@ export async function logAction(
   });
   if (!gamePlayer) throw new Error("GamePlayer not found");
 
-  if (["night", "will"].includes(actionType.phase) && 
+  // Restrict like/dislike in night and will phases
+  if (["night", "will"].includes(actionType.phase) &&
       (actionType.name === "like" || actionType.name === "dislike")) {
     throw new Error("Like/Dislike actions are not allowed during night or Will phase.");
+  }
+
+  // Restrict liking/disliking vote actions
+  if (actionType.name === "like" || actionType.name === "dislike") {
+    const voteExists = await prisma.vote.findFirst({
+      where: {
+        id: { in: targets }
+      }
+    });
+
+    if (voteExists) {
+      throw new Error("You cannot like/dislike a vote action.");
+    }
   }
 
   return prisma.actionLog.create({
@@ -51,6 +64,7 @@ export async function logAction(
     },
   });
 }
+
 
 
 // Create a role-specific or global action

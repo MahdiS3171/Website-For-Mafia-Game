@@ -23,6 +23,8 @@ app.use("/roles", roleRoutes);
 import actionRoutes from "./modules/actions/actions.routes";
 app.use("/actions", actionRoutes);
 
+import voteRoutes from "./modules/votes/votes.routes";
+app.use("/votes", voteRoutes);
 
 
 export default app;

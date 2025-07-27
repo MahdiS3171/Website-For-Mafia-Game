@@ -36,6 +36,7 @@ model Game {
   gamePlayers     GamePlayer[]
   actionLogs      ActionLog[]
   seatAssignments SeatAssignment[]
+  votes           Vote[]
 }
 
 model GamePlayer {
@@ -58,18 +59,17 @@ model GamePlayer {
 }
 
 model ActionType {
-  action_id   Int     @id @default(autoincrement())
-  name        String  @unique
-  phase       String // "day", "voting", "night", "will"
-  role_id     Int?
-  description String?
+  action_id         Int       @id @default(autoincrement())
+  name              String    @unique
+  phase             String
+  role_id           Int?
+  description       String?
+  minTargets        Int?      // optional: define minimum targets
+  maxTargets        Int?      // optional: define maximum targets
+  requiresRoleGuess Boolean   @default(false) // <-- Add this line
 
-  minTargets        Int? // Minimum number of targets required
-  maxTargets        Int? // Maximum number of targets allowed (null = unlimited)
-  requiresRoleGuess Boolean @default(false) // For role detection actions
-
-  role       Role?       @relation(fields: [role_id], references: [role_id])
-  actionLogs ActionLog[]
+  role              Role?     @relation(fields: [role_id], references: [role_id])
+  actionLogs        ActionLog[]
 }
 
 model ActionLog {
@@ -97,4 +97,15 @@ model SeatAssignment {
 
   gamePlayer GamePlayer @relation(fields: [gamePlayer_id], references: [id])
   game       Game       @relation(fields: [game_id], references: [game_id])
+}
+
+model Vote {
+  id        Int      @id @default(autoincrement())
+  game_id   Int
+  round     String // "initial" or "final"
+  voter_id  Int // GamePlayer ID
+  target_id Int // GamePlayer ID
+  createdAt DateTime @default(now())
+
+  game Game @relation(fields: [game_id], references: [game_id])
 }
