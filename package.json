@@ -16,7 +16,6 @@
     "url": "https://github.com/MahdiS3171/Website-For-Mafia-Game/issues"
   },
   "homepage": "https://github.com/MahdiS3171/Website-For-Mafia-Game#readme",
-  "description": "",
   "dependencies": {
     "@prisma/client": "^6.12.0",
     "bcrypt": "^6.0.0",
