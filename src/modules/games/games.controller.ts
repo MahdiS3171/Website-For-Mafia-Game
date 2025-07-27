@@ -138,3 +138,31 @@ export async function advancePhaseController(req: Request, res: Response) {
   }
 }
 
+import { generateSeats } from "./games.service";
+
+export async function generateSeatsController(req: Request, res: Response) {
+  try {
+    const gameId = parseInt(req.params.id);
+    const { startingPlayerId } = req.body;
+
+    const seats = await generateSeats(gameId, startingPlayerId);
+    res.json(seats);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+}
+
+
+import { finalizeWillPhase } from "./games.service";
+
+export async function finalizeWillController(req: Request, res: Response) {
+  try {
+    const gameId = parseInt(req.params.id);
+    const updatedGame = await finalizeWillPhase(gameId);
+    res.json(updatedGame);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+}
+
+

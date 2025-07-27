@@ -8,14 +8,18 @@ export async function createGame() {
 }
 
 // Add players to a game
-export async function addPlayersToGame(gameId: number, playersData: { player_id: number, role_id: number, seat: number }[]) {
+export async function addPlayersToGame(
+  gameId: number,
+  playersData: { player_id: number; role_id: number; seat: number; side: string }[]
+) {
   const gamePlayers = await prisma.gamePlayer.createMany({
-    data: playersData.map(player => ({
+    data: playersData.map((player) => ({
       game_id: gameId,
       player_id: player.player_id,
       role_id: player.role_id,
       seat: player.seat,
-    }))
+      side: player.side, // FIX: Ensure side is provided
+    })),
   });
 
   return gamePlayers;
@@ -29,10 +33,10 @@ export async function getGameDetails(gameId: number) {
       gamePlayers: {
         include: {
           player: true,
-          role: true
-        }
-      }
-    }
+          role: true,
+        },
+      },
+    },
   });
 }
 
@@ -51,11 +55,18 @@ export async function assignRoleToPlayer(gamePlayerId: number, roleId: number) {
 }
 
 export async function updateRemovalInfo(gamePlayerId: number, removedAt: string) {
-  return prisma.gamePlayer.update({
+  // Mark player as removed
+  const updatedPlayer = await prisma.gamePlayer.update({
     where: { id: gamePlayerId },
     data: { alive: false, removedAt },
   });
+
+  // Automatically regenerate seats after elimination
+  await autoRegenerateSeats(updatedPlayer.game_id);
+
+  return updatedPlayer;
 }
+
 
 export async function updateWinStatus(gamePlayerId: number, won: boolean) {
   return prisma.gamePlayer.update({
@@ -68,7 +79,7 @@ export async function autoRemovePlayer(gamePlayerId: number, cause: string) {
   // Get game info for phase/day
   const gamePlayer = await prisma.gamePlayer.findUnique({
     where: { id: gamePlayerId },
-    include: { game: true }
+    include: { game: true },
   });
 
   if (!gamePlayer) throw new Error("GamePlayer not found");
@@ -76,20 +87,33 @@ export async function autoRemovePlayer(gamePlayerId: number, cause: string) {
   const { currentDay, currentPhase } = gamePlayer.game;
   const removedAt = `Day ${currentDay} - ${currentPhase}`;
 
-  return prisma.gamePlayer.update({
+  const updated = await prisma.gamePlayer.update({
     where: { id: gamePlayerId },
-    data: { alive: false, removedAt, cause }
+    data: { alive: false, removedAt, cause },
   });
+
+  await autoRegenerateSeats(gamePlayer.game_id);
+
+  return updated;
 }
 
 export async function endGameAndSetWinners(gameId: number, winningSide: string) {
-  // winningSide is "citizen" or "mafia"
-  return prisma.gamePlayer.updateMany({
+  // Fetch all game players
+  const players = await prisma.gamePlayer.findMany({
     where: { game_id: gameId },
-    data: {
-      won: prisma.raw(`CASE WHEN side = '${winningSide}' THEN true ELSE false END`)
-    }
   });
+
+  // Update winners/losers based on side
+  const updates = players.map((player) =>
+    prisma.gamePlayer.update({
+      where: { id: player.id },
+      data: { won: player.side === winningSide },
+    })
+  );
+
+  await prisma.$transaction(updates);
+
+  return { message: "Game ended and winners set" };
 }
 
 export async function advancePhase(gameId: number) {
@@ -111,7 +135,7 @@ export async function advancePhase(gameId: number) {
     case "night":
       // Check if any dead players without will logged
       const pendingWill = await prisma.gamePlayer.findMany({
-        where: { game_id: gameId, alive: false, removedAt: null }
+        where: { game_id: gameId, alive: false, removedAt: null },
       });
 
       if (pendingWill.length > 0) {
@@ -139,3 +163,93 @@ export async function advancePhase(gameId: number) {
     },
   });
 }
+
+export async function generateSeats(gameId: number, startingPlayerId: number) {
+  const game = await prisma.game.findUnique({
+    where: { game_id: gameId },
+    include: {
+      gamePlayers: {
+        where: { alive: true },
+        orderBy: { seat: "asc" }
+      }
+    }
+  });
+
+  if (!game) throw new Error("Game not found");
+
+  const alivePlayers = game.gamePlayers;
+  const startIndex = alivePlayers.findIndex(p => p.id === startingPlayerId);
+
+  // Reorder so starting player is first
+  const reordered = [
+    ...alivePlayers.slice(startIndex),
+    ...alivePlayers.slice(0, startIndex)
+  ];
+
+  const assignments = reordered.map((player, index) => ({
+    game_id: gameId,
+    gamePlayer_id: player.id,
+    day: game.currentDay,
+    phase: game.currentPhase,
+    seatNumber: index + 1
+  }));
+
+  await prisma.seatAssignment.createMany({ data: assignments });
+
+  return assignments;
+}
+
+
+
+export async function autoRegenerateSeats(gameId: number) {
+  const game = await prisma.game.findUnique({
+    where: { game_id: gameId },
+    include: {
+      gamePlayers: {
+        where: { alive: true },
+        orderBy: { seat: "asc" }
+      }
+    }
+  });
+
+  if (!game) throw new Error("Game not found");
+
+  // Sequential seats for alive players
+  const alivePlayers = game.gamePlayers;
+  const assignments = alivePlayers.map((player, index) => ({
+    game_id: gameId,
+    gamePlayer_id: player.id,
+    day: game.currentDay,
+    phase: game.currentPhase,
+    seatNumber: index + 1
+  }));
+
+  // Save to SeatAssignment table
+  await prisma.seatAssignment.createMany({ data: assignments });
+
+  return assignments;
+}
+
+
+export async function finalizeWillPhase(gameId: number) {
+  // Get all dead players without removedAt
+  const deadPlayers = await prisma.gamePlayer.findMany({
+    where: { game_id: gameId, alive: false, removedAt: null },
+  });
+
+  if (deadPlayers.length > 0) {
+    const updates = deadPlayers.map((player) =>
+      prisma.gamePlayer.update({
+        where: { id: player.id },
+        data: { removedAt: `Day ${player.game_id} - will phase` }
+      })
+    );
+
+    await prisma.$transaction(updates);
+  }
+
+  // Advance phase to day
+  return advancePhase(gameId);
+}
+
+

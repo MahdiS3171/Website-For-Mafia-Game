@@ -6,13 +6,38 @@ export async function logAction(
   targets: number[],
   notes?: string
 ) {
-  // Get current day & phase
+  // Get action rules + game phase
+  const actionType = await prisma.actionType.findUnique({
+    where: { action_id: actionTypeId }
+  });
+  if (!actionType) throw new Error("Invalid action type");
+
+  // Validate target count
+  const targetCount = targets.length;
+
+  if (actionType.minTargets && targetCount < actionType.minTargets) {
+    throw new Error(`This action requires at least ${actionType.minTargets} targets.`);
+  }
+  if (actionType.maxTargets && targetCount > actionType.maxTargets) {
+    throw new Error(`This action allows at most ${actionType.maxTargets} targets.`);
+  }
+
+  // Validate role guess if required
+  if (actionType.requiresRoleGuess && !notes) {
+    throw new Error("Role guess is required for this action.");
+  }
+
+  // Get current game/day/phase
   const gamePlayer = await prisma.gamePlayer.findUnique({
     where: { id: gamePlayerId },
     include: { game: true },
   });
-
   if (!gamePlayer) throw new Error("GamePlayer not found");
+
+  if (["night", "will"].includes(actionType.phase) && 
+      (actionType.name === "like" || actionType.name === "dislike")) {
+    throw new Error("Like/Dislike actions are not allowed during night or Will phase.");
+  }
 
   return prisma.actionLog.create({
     data: {
@@ -26,6 +51,7 @@ export async function logAction(
     },
   });
 }
+
 
 // Create a role-specific or global action
 export async function createActionType(name: string, phase: string, role_id?: number, description?: string) {
