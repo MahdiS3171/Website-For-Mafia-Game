@@ -6,7 +6,8 @@ import { createGame,
    updateWinStatus,
    autoRemovePlayer,
    endGameAndSetWinners,
-   advancePhase
+   advancePhase,
+   autoAdvancePhase
  } from "./games.service";
 
 // Create a new game
@@ -165,4 +166,13 @@ export async function finalizeWillController(req: Request, res: Response) {
   }
 }
 
+export async function autoAdvancePhaseController(req: Request, res: Response) {
+  try {
+    const gameId = parseInt(req.params.id);
+    const result = await autoAdvancePhase(gameId);
+    res.json({ message: "Phase advanced", result });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
 

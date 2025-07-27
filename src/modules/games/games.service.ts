@@ -1,5 +1,8 @@
 import prisma from "../../config/db";
 
+import { determineFinalists, tallyFinalVotes, eliminateFinalist } from "../votes/votes.service";
+import { startDefense } from "../defense/defense.service";
+
 // Create a new game
 export async function createGame() {
   return prisma.game.create({
@@ -252,4 +255,69 @@ export async function finalizeWillPhase(gameId: number) {
   return advancePhase(gameId);
 }
 
+export async function autoAdvancePhase(gameId: number) {
+  const game = await prisma.game.findUnique({ where: { game_id: gameId } });
+  if (!game) throw new Error("Game not found");
+
+  let nextPhase = game.currentPhase;
+
+  switch (game.currentPhase) {
+    case "day":
+      nextPhase = "voting"; // initial voting
+      break;
+
+    case "voting":
+      // determine finalists
+      const finalists = await determineFinalists(gameId);
+      if (finalists.length === 0) {
+        nextPhase = "night"; // skip defense if no finalists
+      } else {
+        nextPhase = "defense";
+        // store finalists in Defense table
+        await startDefense(gameId, finalists.map(f => f.targetId));
+      }
+      break;
+
+    case "defense":
+      nextPhase = "deny"; // after defenses, go to deny role
+      break;
+
+    case "deny":
+      nextPhase = "defend"; // after deny role, go to defend phase
+      break;
+
+    case "defend":
+      nextPhase = "final voting";
+      break;
+
+    case "final voting":
+      const { votes, majority } = await tallyFinalVotes(gameId);
+
+      // check majority
+      const topVote = votes.reduce((max, v) => v._count.target_id > max._count.target_id ? v : max, votes[0]);
+      if (topVote && topVote._count.target_id >= majority) {
+        await eliminateFinalist(topVote.target_id!);
+        nextPhase = "will";
+      } else {
+        nextPhase = "night";
+      }
+      break;
+
+    case "will":
+      nextPhase = "night"; // after will → night
+      break;
+
+    case "night":
+      nextPhase = "day"; // night cycle back to day
+      break;
+
+    default:
+      nextPhase = "day";
+  }
+
+  return prisma.game.update({
+    where: { game_id: gameId },
+    data: { currentPhase: nextPhase, ...(nextPhase === "day" ? { currentDay: game.currentDay + 1 } : {}) }
+  });
+}
 

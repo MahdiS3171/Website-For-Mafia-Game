@@ -32,44 +32,68 @@ model Game {
   game_id         Int              @id @default(autoincrement())
   createdAt       DateTime         @default(now())
   currentDay      Int              @default(1)
-  currentPhase    String           @default("day")
+  currentPhase    String           @default("day")  // "day", "voting", "defense", "deny", "defend", "final voting", "will", "night"
   gamePlayers     GamePlayer[]
   actionLogs      ActionLog[]
   seatAssignments SeatAssignment[]
   votes           Vote[]
+  RoleClaim       RoleClaim[]
+  Defense         Defense[]
 }
 
 model GamePlayer {
-  id        Int      @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   game_id   Int
   player_id Int
   role_id   Int
   seat      Int
   side      String // "citizen" or "mafia"
-  alive     Boolean  @default(true)
+  alive     Boolean @default(true)
   removedAt String?
   cause     String?
-  won       Boolean?
+  won       Boolean @default(false)
 
+  // Relations
   game            Game             @relation(fields: [game_id], references: [game_id])
   player          Player           @relation(fields: [player_id], references: [player_id])
   role            Role             @relation(fields: [role_id], references: [role_id])
   actionLogs      ActionLog[]
   seatAssignments SeatAssignment[]
+  RoleClaim       RoleClaim[]
+
+  // Defense relations
+  finalistIn Defense[] @relation("Finalist")
+  defendIn   Defense[] @relation("Defend")
+
+  // Vote relations
+  votesCast   Vote[] @relation("VoteVoter") // votes this player cast
+  votesTarget Vote[] @relation("VoteTarget") // votes this player received
+}
+
+model RoleClaim {
+  id            Int      @id @default(autoincrement())
+  game_id       Int
+  gamePlayer_id Int
+  roleName      String
+  phase         String // defense or will
+  createdAt     DateTime @default(now())
+
+  game       Game       @relation(fields: [game_id], references: [game_id])
+  gamePlayer GamePlayer @relation(fields: [gamePlayer_id], references: [id])
 }
 
 model ActionType {
-  action_id         Int       @id @default(autoincrement())
-  name              String    @unique
+  action_id         Int     @id @default(autoincrement())
+  name              String  @unique
   phase             String
   role_id           Int?
   description       String?
-  minTargets        Int?      // optional: define minimum targets
-  maxTargets        Int?      // optional: define maximum targets
-  requiresRoleGuess Boolean   @default(false) // <-- Add this line
+  minTargets        Int? // optional: define minimum targets
+  maxTargets        Int? // optional: define maximum targets
+  requiresRoleGuess Boolean @default(false) // <-- Add this line
 
-  role              Role?     @relation(fields: [role_id], references: [role_id])
-  actionLogs        ActionLog[]
+  role       Role?       @relation(fields: [role_id], references: [role_id])
+  actionLogs ActionLog[]
 }
 
 model ActionLog {
@@ -100,12 +124,24 @@ model SeatAssignment {
 }
 
 model Vote {
-  id        Int      @id @default(autoincrement())
+  id        Int    @id @default(autoincrement())
   game_id   Int
-  round     String // "initial" or "final"
-  voter_id  Int // GamePlayer ID
-  target_id Int // GamePlayer ID
-  createdAt DateTime @default(now())
+  voter_id  Int
+  target_id Int?
+  phase     String // "initial voting" or "final voting"
 
-  game Game @relation(fields: [game_id], references: [game_id])
+  game   Game        @relation(fields: [game_id], references: [game_id])
+  voter  GamePlayer  @relation("VoteVoter", fields: [voter_id], references: [id])
+  target GamePlayer? @relation("VoteTarget", fields: [target_id], references: [id])
+}
+
+model Defense {
+  id          Int  @id @default(autoincrement())
+  game_id     Int
+  finalist_id Int
+  defend_id   Int? // nullable
+
+  game     Game        @relation(fields: [game_id], references: [game_id])
+  finalist GamePlayer  @relation("Finalist", fields: [finalist_id], references: [id])
+  defend   GamePlayer? @relation("Defend", fields: [defend_id], references: [id]) // optional
 }

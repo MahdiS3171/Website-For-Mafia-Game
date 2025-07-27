@@ -1,15 +1,16 @@
 import prisma from "../../config/db";
 
+// Cast initial votes (multi-vote)
 export async function castInitialVotes(gameId: number, voterId: number, targets: number[]) {
-  // Remove existing votes from this voter in initial round
+  // Remove existing votes from this voter in initial voting
   await prisma.vote.deleteMany({
-    where: { game_id: gameId, round: "initial", voter_id: voterId }
+    where: { game_id: gameId, phase: "initial voting", voter_id: voterId }
   });
 
   // Insert multiple votes
   const votes = targets.map(target => ({
     game_id: gameId,
-    round: "initial",
+    phase: "initial voting",
     voter_id: voterId,
     target_id: target
   }));
@@ -17,33 +18,37 @@ export async function castInitialVotes(gameId: number, voterId: number, targets:
   return prisma.vote.createMany({ data: votes });
 }
 
+// Cast single final vote
 export async function castFinalVote(gameId: number, voterId: number, targetId: number) {
   await prisma.vote.deleteMany({
-    where: { game_id: gameId, round: "final", voter_id: voterId }
+    where: { game_id: gameId, phase: "final voting", voter_id: voterId }
   });
 
   return prisma.vote.create({
     data: {
       game_id: gameId,
-      round: "final",
       voter_id: voterId,
-      target_id: targetId
+      target_id: targetId,
+      phase: "final voting"
     }
   });
 }
 
-export async function getVoteTally(gameId: number, round: string) {
+// Get tally (initial or final)
+export async function getVoteTally(gameId: number, phase: string) {
   const votes = await prisma.vote.findMany({
-    where: { game_id: gameId, round }
+    where: { game_id: gameId, phase }
   });
 
   // Count votes by target_id
   const tally: Record<number, number> = {};
   for (const v of votes) {
-    tally[v.target_id] = (tally[v.target_id] || 0) + 1;
+    if (v.target_id !== null) {
+      tally[v.target_id] = (tally[v.target_id] || 0) + 1;
+    }
   }
 
-  // Sort by votes DESC, then seat ASC
+  // Sort: votes DESC, seat ASC
   const gamePlayers = await prisma.gamePlayer.findMany({ where: { game_id: gameId } });
 
   const results = Object.entries(tally)
@@ -56,18 +61,44 @@ export async function getVoteTally(gameId: number, round: string) {
   return results;
 }
 
+// Determine finalists (top 3 with ≥ half threshold)
 export async function determineFinalists(gameId: number) {
-  const tally = await getVoteTally(gameId, "initial");
+  const tally = await getVoteTally(gameId, "initial voting");
 
   const aliveCount = await prisma.gamePlayer.count({
     where: { game_id: gameId, alive: true }
   });
 
-  const halfThreshold = Math.ceil(aliveCount / 2);
+  const halfThreshold = Math.ceil(aliveCount / 3);
   const eligible = tally.filter(t => t.votes >= halfThreshold);
 
-  // Top 3 finalists (tie-breaker by seat handled in sorting)
+  // Top 3 finalists
   const finalists = eligible.slice(0, 3);
 
   return finalists;
+}
+
+// Tally final votes
+export async function tallyFinalVotes(gameId: number) {
+  const votes = await prisma.vote.groupBy({
+    by: ["target_id"],
+    where: { game_id: gameId, phase: "final voting" },
+    _count: { target_id: true }
+  });
+
+  const totalAlive = await prisma.gamePlayer.count({
+    where: { game_id: gameId, alive: true }
+  });
+
+  const majority = Math.floor(totalAlive / 2) + 1;
+
+  return { votes, majority };
+}
+
+// Eliminate finalist
+export async function eliminateFinalist(finalistId: number) {
+  return prisma.gamePlayer.update({
+    where: { id: finalistId },
+    data: { alive: false, removedAt: "Final vote", cause: "Eliminated in final voting" }
+  });
 }

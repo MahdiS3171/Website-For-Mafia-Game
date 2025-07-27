@@ -12,7 +12,8 @@ import {
   autoRemovePlayerController,
   advancePhaseController,
   generateSeatsController,
-  finalizeWillController
+  finalizeWillController,
+  autoAdvancePhaseController
 } from "./games.controller";
 
 const router = Router();
@@ -29,6 +30,8 @@ router.patch("/players/:id/remove", authenticateJWT, autoRemovePlayerController)
 router.patch("/:id/advance-phase", authenticateJWT, advancePhaseController);
 router.post("/:id/seats", authenticateJWT, generateSeatsController);
 router.post("/:id/finalize-will", authenticateJWT, finalizeWillController);
+router.patch("/:id/auto-advance", authenticateJWT, autoAdvancePhaseController);
+
 
 
 

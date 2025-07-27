@@ -25,7 +25,14 @@ async function main() {
     { name: "dislike", phase: "day", minTargets: 1, maxTargets: null },
 
     // Will phase actions
-    { name: "will", phase: "will", minTargets: 1, maxTargets: null }
+    { name: "will", phase: "will", minTargets: 1, maxTargets: null },
+    { name: "claim role", phase: "defense", minTargets: 1, maxTargets: 1 },
+    { name: "claim role", phase: "will", minTargets: 1, maxTargets: 1 },
+    { name: "deny role", phase: "deny", minTargets: 1, maxTargets: 1 },
+    { name: "show ability", phase: "day", minTargets: 1, maxTargets: 1 },
+    { name: "show ability", phase: "defense", minTargets: 1, maxTargets: 1 },
+    { name: "show ability", phase: "will", minTargets: 1, maxTargets: 1 },
+    { name: "chain detection", phase: "day", minTargets: 1, maxTargets: null }
   ];
 
   for (const action of actions) {

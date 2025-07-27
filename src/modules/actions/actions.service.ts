@@ -6,51 +6,70 @@ export async function logAction(
   targets: number[],
   notes?: string
 ) {
-  // Get action rules + game phase
   const actionType = await prisma.actionType.findUnique({
     where: { action_id: actionTypeId }
   });
   if (!actionType) throw new Error("Invalid action type");
 
-  // Validate target count
-  const targetCount = targets.length;
-  if (actionType.minTargets && targetCount < actionType.minTargets) {
-    throw new Error(`This action requires at least ${actionType.minTargets} targets.`);
-  }
-  if (actionType.maxTargets && targetCount > actionType.maxTargets) {
-    throw new Error(`This action allows at most ${actionType.maxTargets} targets.`);
-  }
-
-  // Validate role guess if required
-  if (actionType.requiresRoleGuess && !notes) {
-    throw new Error("Role guess is required for this action.");
-  }
-
-  // Get current game/day/phase
   const gamePlayer = await prisma.gamePlayer.findUnique({
     where: { id: gamePlayerId },
     include: { game: true },
   });
   if (!gamePlayer) throw new Error("GamePlayer not found");
 
-  // Restrict like/dislike in night and will phases
+  // Special handling: claim role
+  if (actionType.name === "claim role") {
+    if (!notes) throw new Error("Must specify role name in claim role action");
+
+    await prisma.roleClaim.create({
+      data: {
+        game_id: gamePlayer.game_id,
+        gamePlayer_id: gamePlayerId,
+        roleName: notes,
+        phase: gamePlayer.game.currentPhase
+      }
+    });
+  }
+
+  // Special handling: deny role
+  if (actionType.name === "deny role") {
+    if (!notes) throw new Error("Must specify role name to deny");
+
+    const claimExists = await prisma.roleClaim.findFirst({
+      where: {
+        game_id: gamePlayer.game_id,
+        roleName: notes
+      }
+    });
+    if (!claimExists) throw new Error("No claim found for this role to deny");
+  }
+
+  // Special handling: show ability
+  if (actionType.name === "show ability") {
+    if (!notes) throw new Error("Must specify what ability is being shown");
+
+    const hasClaim = await prisma.roleClaim.findFirst({
+      where: {
+        game_id: gamePlayer.game_id,
+        gamePlayer_id: gamePlayerId
+      }
+    });
+    if (!hasClaim) throw new Error("You must claim or deny a role before showing ability");
+  }
+
+  // Restrict like/dislike rules (unchanged)
   if (["night", "will"].includes(actionType.phase) &&
       (actionType.name === "like" || actionType.name === "dislike")) {
     throw new Error("Like/Dislike actions are not allowed during night or Will phase.");
   }
 
-  // Restrict liking/disliking vote actions
-  if (actionType.name === "like" || actionType.name === "dislike") {
-    const voteExists = await prisma.vote.findFirst({
-      where: {
-        id: { in: targets }
-      }
-    });
-
-    if (voteExists) {
-      throw new Error("You cannot like/dislike a vote action.");
-    }
+  if (actionType.name === "deny role") {
+  const game = await prisma.game.findUnique({ where: { game_id: gamePlayer.game_id } });
+  if (game?.currentPhase !== "deny") {
+    throw new Error("Deny role can only be used during deny role phase");
   }
+}
+
 
   return prisma.actionLog.create({
     data: {
@@ -64,6 +83,7 @@ export async function logAction(
     },
   });
 }
+
 
 
 
