@@ -29,4 +29,8 @@ app.use("/votes", votesRoutes);
 import defenseRoutes from "./modules/defense/defense.routes";
 app.use("/defense", defenseRoutes);
 
+import roleClaimsRoutes from "./modules/actions/roleClaims.routes";
+app.use("/role-claims", roleClaimsRoutes);
+
+
 export default app;

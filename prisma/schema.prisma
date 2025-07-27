@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -20,24 +14,27 @@ model Player {
 }
 
 model Role {
-  role_id     Int          @id @default(autoincrement())
-  name        String       @unique
+  role_id     Int     @id @default(autoincrement())
+  name        String  @unique
   tag         String // "citizen" or "mafia"
-  description String? // role explanaition
+  description String? // role explanation
+
   gamePlayers GamePlayer[]
   actionTypes ActionType[]
+  roleClaims  RoleClaim[]
 }
 
 model Game {
-  game_id         Int              @id @default(autoincrement())
-  createdAt       DateTime         @default(now())
-  currentDay      Int              @default(1)
-  currentPhase    String           @default("day")  // "day", "voting", "defense", "deny", "defend", "final voting", "will", "night"
+  game_id      Int      @id @default(autoincrement())
+  createdAt    DateTime @default(now())
+  currentDay   Int      @default(1)
+  currentPhase String   @default("day") // "day", "voting", "defense", "deny", "defend", "final", "will", "night"
+
   gamePlayers     GamePlayer[]
   actionLogs      ActionLog[]
   seatAssignments SeatAssignment[]
   votes           Vote[]
-  RoleClaim       RoleClaim[]
+  roleClaims      RoleClaim[]
   Defense         Defense[]
 }
 
@@ -74,12 +71,15 @@ model RoleClaim {
   id            Int      @id @default(autoincrement())
   game_id       Int
   gamePlayer_id Int
-  roleName      String
-  phase         String // defense or will
+  role_id       Int
+  phase         String // "defense", "will", or "deny"
+  isDeny        Boolean  @default(false) // true = deny role, false = claim role
+  showText      String? // description when player uses Show Ability
   createdAt     DateTime @default(now())
 
   game       Game       @relation(fields: [game_id], references: [game_id])
   gamePlayer GamePlayer @relation(fields: [gamePlayer_id], references: [id])
+  role       Role       @relation(fields: [role_id], references: [role_id])
 }
 
 model ActionType {
@@ -90,7 +90,7 @@ model ActionType {
   description       String?
   minTargets        Int? // optional: define minimum targets
   maxTargets        Int? // optional: define maximum targets
-  requiresRoleGuess Boolean @default(false) // <-- Add this line
+  requiresRoleGuess Boolean @default(false)
 
   role       Role?       @relation(fields: [role_id], references: [role_id])
   actionLogs ActionLog[]
@@ -103,7 +103,7 @@ model ActionLog {
   actionType_id Int
   day           Int
   phase         String
-  targets       String
+  targets       Json    // <-- change from String to Json
   notes         String?
 
   game       Game       @relation(fields: [game_id], references: [game_id])
@@ -128,7 +128,7 @@ model Vote {
   game_id   Int
   voter_id  Int
   target_id Int?
-  phase     String // "initial voting" or "final voting"
+  phase     String // "initial" or "final"
 
   game   Game        @relation(fields: [game_id], references: [game_id])
   voter  GamePlayer  @relation("VoteVoter", fields: [voter_id], references: [id])
@@ -143,5 +143,5 @@ model Defense {
 
   game     Game        @relation(fields: [game_id], references: [game_id])
   finalist GamePlayer  @relation("Finalist", fields: [finalist_id], references: [id])
-  defend   GamePlayer? @relation("Defend", fields: [defend_id], references: [id]) // optional
+  defend   GamePlayer? @relation("Defend", fields: [defend_id], references: [id])
 }
