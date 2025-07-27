@@ -6,10 +6,79 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model Player {
+  player_id   Int          @id @default(autoincrement())
+  name        String       @unique
+  gamePlayers GamePlayer[]
+}
+
+model Role {
+  role_id     Int          @id @default(autoincrement())
+  name        String       @unique
+  tag         String
+  description String?
+  gamePlayers GamePlayer[]
+  actionTypes ActionType[] // <-- reverse relation
+}
+
+model Game {
+  game_id      Int          @id @default(autoincrement())
+  createdAt    DateTime     @default(now())
+  currentDay   Int          @default(1)
+  currentPhase String       @default("day")
+  gamePlayers  GamePlayer[]
+  actionLogs   ActionLog[] // <-- reverse relation
+}
+
+model GamePlayer {
+  id        Int      @id @default(autoincrement())
+  game_id   Int
+  player_id Int
+  role_id   Int
+  seat      Int
+  side      String
+  alive     Boolean  @default(true)
+  removedAt String?
+  cause     String?
+  won       Boolean?
+
+  game   Game   @relation(fields: [game_id], references: [game_id])
+  player Player @relation(fields: [player_id], references: [player_id])
+  role   Role   @relation(fields: [role_id], references: [role_id])
+
+  actionLogs ActionLog[] // <-- reverse relation
+}
+
+model ActionType {
+  action_id   Int      @id @default(autoincrement())
+  name        String   @unique
+  phase       String   // "day", "voting", "night", "will"
+  role_id     Int?     // null = global
+  description String?
+
+  role        Role?    @relation(fields: [role_id], references: [role_id])
+  actionLogs  ActionLog[]
+}
+
+
+model ActionLog {
+  log_id        Int     @id @default(autoincrement())
+  game_id       Int
+  gamePlayer_id Int
+  actionType_id Int
+  day           Int
+  phase         String
+  targets       String
+  notes         String?
+
+  game       Game       @relation(fields: [game_id], references: [game_id])
+  gamePlayer GamePlayer @relation(fields: [gamePlayer_id], references: [id])
+  actionType ActionType @relation(fields: [actionType_id], references: [action_id])
 }
