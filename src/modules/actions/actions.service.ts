@@ -146,7 +146,7 @@ export async function deleteActionType(id: number) {
 }
 
 export async function getAvailableActionsForPlayer(gamePlayerId: number) {
-  // Get the player's role + current phase from game
+  // Fetch player info
   const gamePlayer = await prisma.gamePlayer.findUnique({
     where: { id: gamePlayerId },
     include: { role: true, game: true },
@@ -156,21 +156,38 @@ export async function getAvailableActionsForPlayer(gamePlayerId: number) {
 
   const currentPhase = gamePlayer.game.currentPhase;
 
-  // Fetch actions that are either global or role-specific AND match phase
-  return prisma.actionType.findMany({
-    where: {
-      AND: [
-        { phase: currentPhase },
-        {
-          OR: [
-            { role_id: null },               // global actions
-            { role_id: gamePlayer.role_id }  // role-specific actions
-          ]
-        }
-      ]
-    }
-  });
+  let actions;
+
+  if (currentPhase === "will") {
+    // During Will: all day actions + claim role
+    actions = await prisma.actionType.findMany({
+      where: {
+        OR: [
+          { phase: "day" },
+          { name: "claim role" }
+        ]
+      }
+    });
+  } else {
+    // Normal: actions matching current phase (global or role-specific)
+    actions = await prisma.actionType.findMany({
+      where: {
+        AND: [
+          { phase: currentPhase },
+          {
+            OR: [
+              { role_id: null },                // global actions
+              { role_id: gamePlayer.role_id }   // role-specific actions
+            ]
+          }
+        ]
+      }
+    });
+  }
+
+  return actions;
 }
+
 
 export async function assignActionsToRole(roleId: number, actionIds: number[]) {
   // Update each action to belong to the role
@@ -182,4 +199,46 @@ export async function assignActionsToRole(roleId: number, actionIds: number[]) {
       })
     )
   );
+}
+
+
+// src/modules/actions/actions.service.ts
+export async function denyRole(
+  gamePlayerId: number,
+  roleId: number
+) {
+  // Get GamePlayer info
+  const gamePlayer = await prisma.gamePlayer.findUnique({
+    where: { id: gamePlayerId },
+    include: { game: true },
+  });
+  if (!gamePlayer) throw new Error("GamePlayer not found");
+
+  // Ensure current phase is 'deny'
+  if (gamePlayer.game.currentPhase !== "deny") {
+    throw new Error("Deny role can only be used during deny phase");
+  }
+
+  // Ensure claim for this role exists (can't deny non-claimed roles)
+  const claimExists = await prisma.roleClaim.findFirst({
+    where: {
+      game_id: gamePlayer.game_id,
+      role_id: roleId,
+      isDeny: false
+    }
+  });
+  if (!claimExists) {
+    throw new Error("No claim found for this role to deny");
+  }
+
+  // Create deny record
+  return prisma.roleClaim.create({
+    data: {
+      game_id: gamePlayer.game_id,
+      gamePlayer_id: gamePlayerId,
+      role_id: roleId,
+      phase: "deny",
+      isDeny: true
+    }
+  });
 }

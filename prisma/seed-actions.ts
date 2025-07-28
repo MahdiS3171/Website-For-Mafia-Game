@@ -15,23 +15,26 @@ async function main() {
       phase: "day",
       minTargets: 1,
       maxTargets: 1,
-      requiresRoleGuess: true // Role guess required
+      requiresRoleGuess: true
     },
     { name: "side with player", phase: "day", minTargets: 1, maxTargets: 1 },
     { name: "should vote for", phase: "day", minTargets: 1, maxTargets: null },
 
-    // Like/Dislike (restricted in some phases)
+    // Like/Dislike
     { name: "like", phase: "day", minTargets: 1, maxTargets: null },
     { name: "dislike", phase: "day", minTargets: 1, maxTargets: null },
 
-    // Will phase actions
+    // Will (inherit day actions + special claim role)
     { name: "will", phase: "will", minTargets: 1, maxTargets: null },
-    { name: "claim role", phase: "defense", minTargets: 1, maxTargets: 1 },
     { name: "claim role", phase: "will", minTargets: 1, maxTargets: 1 },
+
+    // Deny role
     { name: "deny role", phase: "deny", minTargets: 1, maxTargets: 1 },
+
+    // Show ability (can be used in multiple phases but seed once)
     { name: "show ability", phase: "day", minTargets: 1, maxTargets: 1 },
-    { name: "show ability", phase: "defense", minTargets: 1, maxTargets: 1 },
-    { name: "show ability", phase: "will", minTargets: 1, maxTargets: 1 },
+
+    // Chain detection
     { name: "chain detection", phase: "day", minTargets: 1, maxTargets: null }
   ];
 

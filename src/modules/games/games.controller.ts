@@ -159,10 +159,10 @@ import { finalizeWillPhase } from "./games.service";
 export async function finalizeWillController(req: Request, res: Response) {
   try {
     const gameId = parseInt(req.params.id);
-    const updatedGame = await finalizeWillPhase(gameId);
-    res.json(updatedGame);
+    const result = await finalizeWillPhase(gameId);
+    res.json({ message: "Will phase finalized", result });
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    res.status(400).json({ error: err.message });
   }
 }
 
@@ -170,9 +170,10 @@ export async function autoAdvancePhaseController(req: Request, res: Response) {
   try {
     const gameId = parseInt(req.params.id);
     const result = await autoAdvancePhase(gameId);
-    res.json({ message: "Phase advanced", result });
+    res.json({ message: `Phase advanced to ${result.currentPhase}`, result });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 }
+
 

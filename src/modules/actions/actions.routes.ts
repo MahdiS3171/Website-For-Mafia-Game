@@ -24,6 +24,9 @@ import { assignActionsToRoleController } from "./actions.controller";
 // Assign multiple actions to a specific role
 router.patch("/assign-to-role/:id", authenticateJWT, assignActionsToRoleController);
 
+import { denyRoleController } from "./actions.controller";
+// Add Deny Role endpoint
+router.post("/deny-role", authenticateJWT, denyRoleController);
 
 
 

@@ -7,7 +7,7 @@ import {
   denyRoleController,
   showAbilityController,
   assignDefendController,
-  getDefendOrderController
+  getDefendStageController
 } from "./defense.controller";
 
 const router = Router();
@@ -16,13 +16,13 @@ const router = Router();
 router.post("/:gameId/start", authenticateJWT, startDefenseController);
 router.get("/:gameId/order", authenticateJWT, getDefenseOrderController);
 
-// Claim / Deny / Show
+// Claim / Deny / Show ability
 router.post("/:gameId/claim", authenticateJWT, claimRoleController);
 router.post("/:gameId/deny", authenticateJWT, denyRoleController);
 router.post("/:gameId/show-ability", authenticateJWT, showAbilityController);
 
-// Defend phase routes
+// Defend assignment routes
 router.post("/:gameId/assign-defend", authenticateJWT, assignDefendController);
-router.get("/:gameId/defend-order", authenticateJWT, getDefendOrderController);
+router.get("/:gameId/defend-stage", authenticateJWT, getDefendStageController);
 
 export default router;

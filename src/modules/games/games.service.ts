@@ -235,25 +235,30 @@ export async function autoRegenerateSeats(gameId: number) {
 
 
 export async function finalizeWillPhase(gameId: number) {
-  // Get all dead players without removedAt
+  // Mark all dead players without a removal record
   const deadPlayers = await prisma.gamePlayer.findMany({
     where: { game_id: gameId, alive: false, removedAt: null },
+    include: { game: true }
   });
 
   if (deadPlayers.length > 0) {
     const updates = deadPlayers.map((player) =>
       prisma.gamePlayer.update({
         where: { id: player.id },
-        data: { removedAt: `Day ${player.game_id} - will phase` }
+        data: { removedAt: `Day ${player.game.currentDay} - will phase` }
       })
     );
 
     await prisma.$transaction(updates);
   }
 
-  // Advance phase to day
-  return advancePhase(gameId);
+  // After Will phase, move to Night phase
+  return prisma.game.update({
+    where: { game_id: gameId },
+    data: { currentPhase: "night" }
+  });
 }
+
 
 export async function autoAdvancePhase(gameId: number) {
   const game = await prisma.game.findUnique({ where: { game_id: gameId } });
@@ -263,61 +268,80 @@ export async function autoAdvancePhase(gameId: number) {
 
   switch (game.currentPhase) {
     case "day":
-      nextPhase = "voting"; // initial voting
+      // After day → move to initial voting
+      nextPhase = "voting";
       break;
 
     case "voting":
-      // determine finalists
+      // Determine finalists based on votes
       const finalists = await determineFinalists(gameId);
+
       if (finalists.length === 0) {
-        nextPhase = "night"; // skip defense if no finalists
+        // No finalists → skip defense/deny/defend → go straight to night
+        nextPhase = "night";
       } else {
+        // Move to defense and store finalists
         nextPhase = "defense";
-        // store finalists in Defense table
         await startDefense(gameId, finalists.map(f => f.targetId));
       }
       break;
 
     case "defense":
-      nextPhase = "deny"; // after defenses, go to deny role
+      // After defense speeches → deny role phase
+      nextPhase = "deny";
       break;
 
     case "deny":
-      nextPhase = "defend"; // after deny role, go to defend phase
+      // After deny role actions → assign defend players
+      nextPhase = "defend";
       break;
 
     case "defend":
+      // After defend phase → final voting
       nextPhase = "final voting";
       break;
 
     case "final voting":
+      // Count votes and check majority
       const { votes, majority } = await tallyFinalVotes(gameId);
 
-      // check majority
-      const topVote = votes.reduce((max, v) => v._count.target_id > max._count.target_id ? v : max, votes[0]);
+      const topVote = votes.reduce((max, v) =>
+        v._count.target_id > max._count.target_id ? v : max,
+        votes[0]
+      );
+
       if (topVote && topVote._count.target_id >= majority) {
+        // Eliminate finalist with majority
         await eliminateFinalist(topVote.target_id!);
         nextPhase = "will";
       } else {
+        // No majority → go directly to night
         nextPhase = "night";
       }
       break;
 
     case "will":
-      nextPhase = "night"; // after will → night
+      // After will phase → night
+      nextPhase = "night";
       break;
 
     case "night":
-      nextPhase = "day"; // night cycle back to day
+      // After night → next day
+      nextPhase = "day";
       break;
 
     default:
+      // Fallback to day if phase is unknown
       nextPhase = "day";
   }
 
+  // Update game phase and increment day if returning to "day"
   return prisma.game.update({
     where: { game_id: gameId },
-    data: { currentPhase: nextPhase, ...(nextPhase === "day" ? { currentDay: game.currentDay + 1 } : {}) }
+    data: {
+      currentPhase: nextPhase,
+      ...(nextPhase === "day" ? { currentDay: game.currentDay + 1 } : {})
+    }
   });
 }
 

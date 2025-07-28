@@ -90,7 +90,7 @@ export async function tallyFinalVotes(gameId: number) {
     where: { game_id: gameId, alive: true }
   });
 
-  const majority = Math.floor(totalAlive / 2) + 1;
+  const majority = Math.ceil(totalAlive / 3);
 
   return { votes, majority };
 }

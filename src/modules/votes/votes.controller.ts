@@ -7,21 +7,9 @@ import {
   tallyFinalVotes,
   eliminateFinalist
 } from "./votes.service";
+import { autoAdvancePhase } from "../games/games.service"; // <-- Import
 
 // ------------------- INITIAL VOTING -------------------
-
-// Cast multiple initial votes
-export async function castInitialVotesController(req: Request, res: Response) {
-  try {
-    const gameId = parseInt(req.params.gameId);
-    const { voterId, targets } = req.body; // targets = array of GamePlayer IDs
-
-    const result = await castInitialVotes(gameId, voterId, targets);
-    res.json({ message: "Initial votes recorded", result });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
-  }
-}
 
 // Get tally for initial voting
 export async function initialTallyController(req: Request, res: Response) {
@@ -45,7 +33,21 @@ export async function determineFinalistsController(req: Request, res: Response) 
   }
 }
 
-// ------------------- FINAL VOTING -------------------
+export async function castInitialVotesController(req: Request, res: Response) {
+  try {
+    const gameId = parseInt(req.params.gameId);
+    const { voterId, targets } = req.body;
+
+    const result = await castInitialVotes(gameId, voterId, targets);
+
+    // Auto-advance after initial voting if all votes are cast
+    await autoAdvancePhase(gameId);
+
+    res.json({ message: "Initial votes recorded", result });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
 
 // Cast single final vote
 export async function castFinalVoteController(req: Request, res: Response) {
@@ -54,6 +56,10 @@ export async function castFinalVoteController(req: Request, res: Response) {
     const { voterId, targetId } = req.body;
 
     const result = await castFinalVote(gameId, voterId, targetId);
+
+    // Auto-advance after final voting
+    await autoAdvancePhase(gameId);
+
     res.json({ message: "Final vote recorded", result });
   } catch (err: any) {
     res.status(400).json({ error: err.message });

@@ -92,3 +92,19 @@ export async function assignActionsToRoleController(req: Request, res: Response)
     res.status(500).json({ message: err.message });
   }
 }
+
+
+import { denyRole } from "./actions.service";
+
+export async function denyRoleController(req: Request, res: Response) {
+  try {
+    const gamePlayerId = parseInt(req.body.gamePlayerId);
+    const roleId = parseInt(req.body.roleId);
+
+    const result = await denyRole(gamePlayerId, roleId);
+    res.json({ message: "Deny role action recorded", result });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
+
