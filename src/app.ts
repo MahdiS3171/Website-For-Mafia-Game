@@ -32,5 +32,7 @@ app.use("/defense", defenseRoutes);
 import roleClaimsRoutes from "./modules/actions/roleClaims.routes";
 app.use("/role-claims", roleClaimsRoutes);
 
+import nightRoutes from "./modules/night/night.routes";
+app.use("/night", nightRoutes);
 
 export default app;

@@ -50,6 +50,8 @@ model GamePlayer {
   cause     String?
   won       Boolean @default(false)
 
+  sniperCitizenKills Int @default(0)
+
   // Relations
   game            Game             @relation(fields: [game_id], references: [game_id])
   player          Player           @relation(fields: [player_id], references: [player_id])

@@ -235,29 +235,28 @@ export async function autoRegenerateSeats(gameId: number) {
 
 
 export async function finalizeWillPhase(gameId: number) {
-  // Mark all dead players without a removal record
+  // Mark all dead players with removedAt if not already set
   const deadPlayers = await prisma.gamePlayer.findMany({
     where: { game_id: gameId, alive: false, removedAt: null },
-    include: { game: true }
   });
 
   if (deadPlayers.length > 0) {
     const updates = deadPlayers.map((player) =>
       prisma.gamePlayer.update({
         where: { id: player.id },
-        data: { removedAt: `Day ${player.game.currentDay} - will phase` }
+        data: { removedAt: `Day ${player.game_id} - Will phase` },
       })
     );
-
     await prisma.$transaction(updates);
   }
 
-  // After Will phase, move to Night phase
+  // Move to night phase
   return prisma.game.update({
     where: { game_id: gameId },
-    data: { currentPhase: "night" }
+    data: { currentPhase: "night" },
   });
 }
+
 
 
 export async function autoAdvancePhase(gameId: number) {
