@@ -6,6 +6,13 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Lock, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../lib/api";
+
+interface LoginResponse {
+  token: string;
+  username: string;
+  isAdmin: boolean;
+}
 
 const Login = () => {
   const [username, setUsername] = useState("");
@@ -15,42 +22,38 @@ const Login = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Admin credentials - in a real app, this would be handled server-side
-  const ADMIN_CREDENTIALS = {
-    username: "admin",
-    password: "admin123"
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      // Call backend auth endpoint (adjust URL to match your Django route)
+      const res = await api.post<LoginResponse>("/auth/login/", { username, password });
 
-    if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
-      // Store admin session
-      localStorage.setItem("isAdmin", "true");
-      localStorage.setItem("adminUsername", username);
-      
+      // Save token & user info
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("adminUsername", res.data.username);
+      localStorage.setItem("isAdmin", res.data.isAdmin.toString());
+
       toast({
         title: "Login Successful",
-        description: "Welcome back, Admin!",
+        description: `Welcome back, ${res.data.username}!`,
       });
-      
+
       navigate("/");
-    } else {
+    } catch (err) {
       toast({
         title: "Login Failed",
         description: "Invalid username or password",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("isAdmin");
     localStorage.removeItem("adminUsername");
     toast({
@@ -61,7 +64,7 @@ const Login = () => {
   };
 
   // Check if already logged in
-  const isLoggedIn = localStorage.getItem("isAdmin") === "true";
+  const isLoggedIn = localStorage.getItem("token") !== null;
 
   if (isLoggedIn) {
     return (
@@ -77,18 +80,10 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button 
-              onClick={() => navigate("/")} 
-              className="w-full"
-              size="lg"
-            >
+            <Button onClick={() => navigate("/")} className="w-full" size="lg">
               Go to Dashboard
             </Button>
-            <Button 
-              onClick={handleLogout} 
-              variant="outline" 
-              className="w-full"
-            >
+            <Button onClick={handleLogout} variant="outline" className="w-full">
               Logout
             </Button>
           </CardContent>
@@ -151,27 +146,14 @@ const Login = () => {
                 </Button>
               </div>
             </div>
-            <Button 
-              type="submit" 
-              className="w-full" 
-              size="lg"
-              disabled={isLoading}
-            >
+            <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
               {isLoading ? "Logging in..." : "Login"}
             </Button>
           </form>
-          
-          <div className="mt-6 p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground text-center">
-              <strong>Demo Credentials:</strong><br />
-              Username: admin<br />
-              Password: admin123
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>
   );
 };
 
-export default Login; 
+export default Login;

@@ -1,7 +1,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
-import { UserPlus, Gamepad2, Trophy, BarChart3, Users, Target, LogOut } from "lucide-react";
+import {
+  UserPlus,
+  Gamepad2,
+  Trophy,
+  BarChart3,
+  Users,
+  Target,
+  LogOut,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
@@ -9,13 +17,18 @@ const Index = () => {
   const { toast } = useToast();
 
   const handleLogout = () => {
-    localStorage.removeItem("isAdmin");
+    // Clear stored auth (token or username)
+    localStorage.removeItem("token");
     localStorage.removeItem("adminUsername");
+    localStorage.removeItem("isAdmin");
+
     toast({
       title: "Logged Out",
       description: "You have been logged out successfully",
     });
-    navigate("/results");
+
+    // Redirect to login or results page
+    navigate("/login");
   };
 
   return (
@@ -26,11 +39,13 @@ const Index = () => {
           <div className="flex justify-between items-center">
             <div className="text-center flex-1">
               <h1 className="text-4xl font-bold text-foreground mb-2">Game Logger</h1>
-              <p className="text-xl text-muted-foreground">Track and analyze your game sessions</p>
+              <p className="text-xl text-muted-foreground">
+                Track and analyze your game sessions
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">
-                Welcome, {localStorage.getItem("adminUsername")}
+                Welcome, {localStorage.getItem("adminUsername") || "Admin"}
               </span>
               <Button
                 onClick={handleLogout}
@@ -56,9 +71,7 @@ const Index = () => {
                 <UserPlus className="w-8 h-8 text-primary" />
               </div>
               <CardTitle className="text-xl">Add Player</CardTitle>
-              <CardDescription>
-                Register new players to the database
-              </CardDescription>
+              <CardDescription>Register new players to the database</CardDescription>
             </CardHeader>
             <CardContent>
               <Button asChild className="w-full" size="lg">

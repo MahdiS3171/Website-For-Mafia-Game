@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { addPlayer } from "../lib/api";
+import { createPlayer, addPlayerToGame } from "../lib/api";
 
 const AddPlayer = () => {
   const [name, setName] = useState("");
   const [gameId, setGameId] = useState("");
+  const [seatNumber, setSeatNumber] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,7 +21,17 @@ const AddPlayer = () => {
     setError(null);
 
     try {
-      await addPlayer({ name, game: gameId });
+      // 1. Create player
+      const newPlayerRes = await createPlayer({ name });
+      const playerId = newPlayerRes.data.id;
+
+      // 2. Add player to game with seat number
+      await addPlayerToGame({
+        game: gameId,
+        player: playerId,
+        seat_number: seatNumber ?? 1, // default 1 if empty
+      });
+
       navigate(`/game/${gameId}`);
     } catch (err: any) {
       setError(err.message);
@@ -33,7 +44,10 @@ const AddPlayer = () => {
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-xl mx-auto">
         <div className="mb-6">
-          <Link to="/" className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors">
+          <Link
+            to="/"
+            className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Home
           </Link>
@@ -58,6 +72,12 @@ const AddPlayer = () => {
                 value={gameId}
                 onChange={(e) => setGameId(e.target.value)}
                 required
+              />
+              <Input
+                type="number"
+                placeholder="Seat number"
+                value={seatNumber ?? ""}
+                onChange={(e) => setSeatNumber(Number(e.target.value))}
               />
 
               {error && <p className="text-red-500 text-sm">{error}</p>}

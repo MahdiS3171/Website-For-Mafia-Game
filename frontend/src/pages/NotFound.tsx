@@ -7,7 +7,7 @@ import { Home, Lock } from "lucide-react";
 
 const NotFound = () => {
   const location = useLocation();
-  const isAdmin = localStorage.getItem("isAdmin") === "true";
+  const isLoggedIn = localStorage.getItem("token") !== null;
 
   useEffect(() => {
     console.error(
@@ -29,7 +29,7 @@ const NotFound = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isAdmin ? (
+          {isLoggedIn ? (
             <Button asChild className="w-full" size="lg">
               <Link to="/">
                 <Home className="w-4 h-4 mr-2" />
