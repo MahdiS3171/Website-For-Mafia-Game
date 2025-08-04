@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>➕ افزودن اکشن به بازی شماره {{ game.id }}</h2>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">ثبت</button>
+  </form>
+  <a href="{% url 'games:detail' game.id %}">بازگشت</a>
+{% endblock %}
