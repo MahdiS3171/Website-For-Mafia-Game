@@ -1,20 +1,12 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Users, Clock, ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom";
-
-interface GamePlayer {
-  id: string;
-  name: string;
-  role: string;
-  seatNumber: number;
-  isAlive: boolean;
-  isSelected: boolean;
-}
+import { getGameDetails } from "../lib/api";
+import { GameResponse, NestedPlayer } from "../types";
 
 interface GameAction {
   name: string;
@@ -25,47 +17,15 @@ interface GameAction {
 const GameSession = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const { toast } = useToast();
-  
+
+  const [game, setGame] = useState<GameResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
   const [currentPhase, setCurrentPhase] = useState("Day");
   const [round, setRound] = useState(1);
-
-  // Mock data - replace with actual database calls
-  const [players, setPlayers] = useState<GamePlayer[]>([
-    {
-      id: "1",
-      name: "John Doe",
-      role: "Mafia",
-      seatNumber: 1,
-      isAlive: true,
-      isSelected: false,
-    },
-    {
-      id: "2",
-      name: "Jane Smith",
-      role: "Detective",
-      seatNumber: 2,
-      isAlive: true,
-      isSelected: false,
-    },
-    {
-      id: "3",
-      name: "Mike Johnson",
-      role: "Citizen",
-      seatNumber: 3,
-      isAlive: true,
-      isSelected: false,
-    },
-    {
-      id: "4",
-      name: "Sarah Wilson",
-      role: "Doctor",
-      seatNumber: 4,
-      isAlive: true,
-      isSelected: false,
-    },
-  ]);
 
   const availableActions: GameAction[] = [
     { name: "Vote", requiresTargets: 1, description: "Vote to eliminate a player" },
@@ -76,22 +36,34 @@ const GameSession = () => {
     { name: "Kill", requiresTargets: 1, description: "Mafia action to eliminate" },
   ];
 
+  // === Fetch game details on mount ===
+  useEffect(() => {
+    const fetchGame = async () => {
+      if (!gameId) return;
+      try {
+        const res = await getGameDetails(gameId);
+        setGame(res.data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGame();
+  }, [gameId]);
+
+  // === Handle Player Selection ===
   const handlePlayerClick = (playerId: string) => {
-    if (!players.find(p => p.id === playerId)?.isAlive) return;
-    
     setSelectedPlayer(playerId);
-    setSelectedTargets([]);
+    setSelectedTargets([]); // reset targets
   };
 
   const handleTargetSelect = (targetId: string) => {
-    if (!players.find(p => p.id === targetId)?.isAlive) return;
     if (targetId === selectedPlayer) return;
 
-    if (selectedTargets.includes(targetId)) {
-      setSelectedTargets(selectedTargets.filter(id => id !== targetId));
-    } else {
-      setSelectedTargets([...selectedTargets, targetId]);
-    }
+    setSelectedTargets((prev) =>
+      prev.includes(targetId) ? prev.filter((id) => id !== targetId) : [...prev, targetId]
+    );
   };
 
   const executeAction = (action: GameAction) => {
@@ -104,12 +76,14 @@ const GameSession = () => {
       return;
     }
 
-    const actingPlayer = players.find(p => p.id === selectedPlayer);
-    const targetPlayers = selectedTargets.map(id => players.find(p => p.id === id)?.name).join(", ");
+    const actingPlayer = game?.players.find((p) => p.id === selectedPlayer)?.name;
+    const targetPlayers = selectedTargets
+      .map((id) => game?.players.find((p) => p.id === id)?.name)
+      .join(", ");
 
     toast({
       title: "Action Executed",
-      description: `${actingPlayer?.name} used "${action.name}" on ${targetPlayers}`,
+      description: `${actingPlayer} used "${action.name}" on ${targetPlayers}`,
     });
 
     // Reset selections
@@ -122,20 +96,20 @@ const GameSession = () => {
       setCurrentPhase("Night");
     } else {
       setCurrentPhase("Day");
-      setRound(round + 1);
+      setRound((prev) => prev + 1);
     }
-    
+
     setSelectedPlayer(null);
     setSelectedTargets([]);
-    
+
     toast({
       title: "Phase Changed",
       description: `Now entering ${currentPhase === "Day" ? "Night" : "Day"} phase`,
     });
   };
 
-  const getRoleColor = (role: string) => {
-    switch (role.toLowerCase()) {
+  const getRoleColor = (role?: string) => {
+    switch (role?.toLowerCase()) {
       case "mafia":
         return "bg-red-100 text-red-800 border-red-200";
       case "detective":
@@ -149,11 +123,27 @@ const GameSession = () => {
     }
   };
 
+  // === Loading/Error States ===
+  if (loading) {
+    return <div className="text-center py-12 text-muted-foreground">Loading game...</div>;
+  }
+
+  if (error || !game) {
+    return (
+      <div className="text-center py-12 text-red-500">
+        Failed to load game: {error || "Game not found"}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <Link to="/games" className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors">
+          <Link
+            to="/games"
+            className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Games
           </Link>
@@ -164,7 +154,7 @@ const GameSession = () => {
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <CardTitle className="text-2xl">Game #{gameId}</CardTitle>
+                <CardTitle className="text-2xl">Game #{game.id}</CardTitle>
                 <div className="flex items-center gap-4 mt-2 text-muted-foreground">
                   <span className="flex items-center">
                     <Clock className="w-4 h-4 mr-1" />
@@ -172,7 +162,7 @@ const GameSession = () => {
                   </span>
                   <span className="flex items-center">
                     <Users className="w-4 h-4 mr-1" />
-                    {players.filter(p => p.isAlive).length} alive
+                    {game.players.filter((p) => p).length} players
                   </span>
                 </div>
               </div>
@@ -197,7 +187,7 @@ const GameSession = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {players.map((player) => (
+                  {game.players.map((player: NestedPlayer) => (
                     <Card
                       key={player.id}
                       className={`cursor-pointer transition-all hover:shadow-md ${
@@ -208,28 +198,25 @@ const GameSession = () => {
                         selectedTargets.includes(player.id)
                           ? "ring-2 ring-accent"
                           : ""
-                      } ${
-                        !player.isAlive ? "opacity-50 grayscale" : ""
                       }`}
-                      onClick={() => handlePlayerClick(player.id)}
+                      onClick={() =>
+                        selectedPlayer
+                          ? handleTargetSelect(player.id)
+                          : handlePlayerClick(player.id)
+                      }
                     >
                       <CardContent className="p-4 text-center">
                         <div className="mb-2">
                           <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <span className="font-bold text-lg">{player.seatNumber}</span>
+                            <span className="font-bold text-lg">
+                              {player.seat_number}
+                            </span>
                           </div>
                           <h3 className="font-semibold text-sm">{player.name}</h3>
                         </div>
                         <Badge className={getRoleColor(player.role)}>
-                          {player.role}
+                          {player.role || "Unassigned"}
                         </Badge>
-                        {!player.isAlive && (
-                          <div className="mt-2">
-                            <Badge variant="destructive">
-                              Eliminated
-                            </Badge>
-                          </div>
-                        )}
                       </CardContent>
                     </Card>
                   ))}
@@ -249,13 +236,19 @@ const GameSession = () => {
                   <div className="space-y-4">
                     <div className="p-3 bg-secondary rounded-lg">
                       <p className="text-sm font-medium">Selected Player:</p>
-                      <p className="text-lg">{players.find(p => p.id === selectedPlayer)?.name}</p>
+                      <p className="text-lg">
+                        {game.players.find((p) => p.id === selectedPlayer)?.name}
+                      </p>
                     </div>
 
                     {selectedTargets.length > 0 && (
                       <div className="p-3 bg-accent/20 rounded-lg">
                         <p className="text-sm font-medium">Target(s):</p>
-                        <p>{selectedTargets.map(id => players.find(p => p.id === id)?.name).join(", ")}</p>
+                        <p>
+                          {selectedTargets
+                            .map((id) => game.players.find((p) => p.id === id)?.name)
+                            .join(", ")}
+                        </p>
                       </div>
                     )}
 

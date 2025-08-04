@@ -4,16 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Calendar, Users, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
-import { API_BASE_URL } from "../config";
-
-interface Game {
-  id: string;
-  date: string;
-  playerCount: number;
-  status: "completed" | "in-progress" | "abandoned";
-  winner?: string;
-  duration?: string;
-}
+import { getGames } from "../lib/api";
+import { Game } from "../types";
 
 const AllGames = () => {
   const [games, setGames] = useState<Game[]>([]);
@@ -23,12 +15,14 @@ const AllGames = () => {
   useEffect(() => {
     const fetchGames = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/games/`);
-        if (!res.ok) throw new Error(`Error ${res.status}`);
-        const data = await res.json();
-        setGames(data);
-      } catch (err: any) {
-        setError(err.message);
+        const res = await getGames();
+        setGames(res.data);
+      } catch (err) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("An unexpected error occurred.");
+        }
       } finally {
         setLoading(false);
       }
@@ -62,7 +56,10 @@ const AllGames = () => {
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
-          <Link to="/" className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors">
+          <Link
+            to="/"
+            className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Home
           </Link>

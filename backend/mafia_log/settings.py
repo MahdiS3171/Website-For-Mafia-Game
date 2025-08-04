@@ -59,7 +59,7 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # React dev server
+    "http://localhost:8080",  # React dev server
 ]
 
 ROOT_URLCONF = 'mafia_log.urls'

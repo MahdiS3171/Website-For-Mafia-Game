@@ -1,22 +1,14 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import GameViewSet, GamePlayerViewSet
-from django.urls import path
-from . import views
+from .views import GameViewSet, GamePlayerViewSet, GameRoleViewSet
 
-
-# router = DefaultRouter()
-# router.register(r'', GameViewSet)
-# router.register(r'players', GamePlayerViewSet)
-
-# urlpatterns = [
-#     path('', include(router.urls)),
-# ]
+router = DefaultRouter()
+router.register(r'', GameViewSet, basename='game')
+router.register(r'players', GamePlayerViewSet, basename='game-players')
+router.register(r'roles', GameRoleViewSet, basename='game-roles')
 
 app_name = 'games'
 
 urlpatterns = [
-    path('', views.game_list, name='list'),
-    path('create/', views.game_create, name='create'),
-    path('<int:pk>/', views.game_detail, name='detail'),
+    path('', include(router.urls)),
 ]

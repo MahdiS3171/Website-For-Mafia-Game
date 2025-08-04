@@ -1,50 +1,46 @@
 from rest_framework import viewsets
-from .models import Game, GamePlayer
-from .serializers import GameSerializer, GamePlayerSerializer
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .models import Game, GamePlayer, GameRole
+from .serializers import GameSerializer, GamePlayerSerializer, GameRoleSerializer
 
-from django.shortcuts import render, redirect, get_object_or_404
-from .models import Game, GamePlayer
-from .forms import GameForm, GamePlayerFormSet
-
+# API for games
 class GameViewSet(viewsets.ModelViewSet):
-    queryset = Game.objects.all()
+    queryset = Game.objects.all().order_by('-created_at')
     serializer_class = GameSerializer
 
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Mark a game as completed."""
+        game = self.get_object()
+        game.is_active = False
+        game.save()
+        return Response(self.get_serializer(game).data)
+
+
+# API for game players
 class GamePlayerViewSet(viewsets.ModelViewSet):
     queryset = GamePlayer.objects.all()
     serializer_class = GamePlayerSerializer
-    
-def game_list(request):
-    games = Game.objects.all()
-    return render(request, 'games/game_list.html', {'games': games})
 
-def game_detail(request, pk):
-    game = get_object_or_404(Game, pk=pk)
-    game_players = GamePlayer.objects.filter(game=game).order_by('seat_number')
-    return render(request, 'games/game_detail.html', {'game': game, 'game_players': game_players})
+    def get_queryset(self):
+        """Optionally filter by game ID (e.g., ?game=1)."""
+        queryset = super().get_queryset()
+        game_id = self.request.query_params.get('game')
+        if game_id:
+            queryset = queryset.filter(game_id=game_id)
+        return queryset
 
 
-def game_create(request):
-    if request.method == 'POST':
-        game_form = GameForm(request.POST)
-        formset = GamePlayerFormSet(request.POST)
-        if game_form.is_valid() and formset.is_valid():
-            seat_numbers = []
-            for form in formset:
-                seat_number = form.cleaned_data.get('seat_number')
-                if seat_number in seat_numbers:
-                    form.add_error('seat_number', 'شماره صندلی تکراری است.')
-                    break
-                seat_numbers.append(seat_number)
+# API for game roles (optional, if roles are needed)
+class GameRoleViewSet(viewsets.ModelViewSet):
+    queryset = GameRole.objects.all()
+    serializer_class = GameRoleSerializer
 
-            if all(form.is_valid() for form in formset):
-                game = game_form.save()
-                players = formset.save(commit=False)
-                for player in players:
-                    player.game = game
-                    player.save()
-                return redirect('games:detail', pk=game.pk)
-    else:
-        game_form = GameForm()
-        formset = GamePlayerFormSet(queryset=GamePlayer.objects.none())
-    return render(request, 'games/game_form.html', {'form': game_form, 'formset': formset})
+    def get_queryset(self):
+        """Optionally filter by game ID (e.g., ?game=1)."""
+        queryset = super().get_queryset()
+        game_id = self.request.query_params.get('game')
+        if game_id:
+            queryset = queryset.filter(game_id=game_id)
+        return queryset
