@@ -1,38 +1,37 @@
 import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { addPlayer } from "../lib/api";
 
 const AddPlayer = () => {
-  const [playerName, setPlayerName] = useState("");
-  const { toast } = useToast();
+  const [name, setName] = useState("");
+  const [gameId, setGameId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!playerName.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a player name",
-        variant: "destructive",
-      });
-      return;
-    }
+    setLoading(true);
+    setError(null);
 
-    // TODO: Add player to database
-    toast({
-      title: "Success",
-      description: `Player "${playerName}" has been added`,
-    });
-    setPlayerName("");
+    try {
+      await addPlayer({ name, game: gameId });
+      navigate(`/game/${gameId}`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-xl mx-auto">
         <div className="mb-6">
           <Link to="/" className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -42,26 +41,29 @@ const AddPlayer = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl font-bold">Add New Player</CardTitle>
-            <CardDescription>
-              Add a new player to the database
-            </CardDescription>
+            <CardTitle>Add Player to Game</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="playerName">Full Name</Label>
-                <Input
-                  id="playerName"
-                  type="text"
-                  placeholder="Enter player's full name"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-              <Button type="submit" className="w-full">
-                Add Player
+              <Input
+                type="text"
+                placeholder="Player name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+              <Input
+                type="text"
+                placeholder="Game ID"
+                value={gameId}
+                onChange={(e) => setGameId(e.target.value)}
+                required
+              />
+
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+
+              <Button type="submit" disabled={loading} className="w-full">
+                {loading ? "Adding..." : "Add Player"}
               </Button>
             </form>
           </CardContent>

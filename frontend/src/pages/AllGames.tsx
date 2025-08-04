@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Calendar, Users, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
+import { API_BASE_URL } from "../config";
 
 interface Game {
   id: string;
@@ -14,37 +16,26 @@ interface Game {
 }
 
 const AllGames = () => {
-  // Mock data - replace with actual database calls
-  const games: Game[] = [
-    {
-      id: "1",
-      date: "2024-01-15",
-      playerCount: 8,
-      status: "completed",
-      winner: "Mafia",
-      duration: "45 min",
-    },
-    {
-      id: "2",
-      date: "2024-01-14",
-      playerCount: 6,
-      status: "completed",
-      winner: "Citizens",
-      duration: "32 min",
-    },
-    {
-      id: "3",
-      date: "2024-01-13",
-      playerCount: 10,
-      status: "in-progress",
-    },
-    {
-      id: "4",
-      date: "2024-01-12",
-      playerCount: 7,
-      status: "abandoned",
-    },
-  ];
+  const [games, setGames] = useState<Game[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchGames = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/games/`);
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const data = await res.json();
+        setGames(data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGames();
+  }, []);
 
   const getStatusColor = (status: Game["status"]) => {
     switch (status) {
@@ -58,6 +49,14 @@ const AllGames = () => {
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
+
+  if (loading) {
+    return <div className="text-center py-12 text-muted-foreground">Loading games...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-12 text-red-500">Failed to load games: {error}</div>;
+  }
 
   return (
     <div className="min-h-screen bg-background p-4">
@@ -93,7 +92,7 @@ const AllGames = () => {
                       <Calendar className="w-4 h-4 mr-2" />
                       {new Date(game.date).toLocaleDateString()}
                     </div>
-                    
+
                     <div className="flex items-center text-sm text-muted-foreground">
                       <Users className="w-4 h-4 mr-2" />
                       {game.playerCount} players
@@ -113,9 +112,9 @@ const AllGames = () => {
                     )}
 
                     <div className="flex gap-2 mt-4">
-                      <Button 
-                        asChild 
-                        size="sm" 
+                      <Button
+                        asChild
+                        size="sm"
                         className="flex-1"
                         variant={game.status === "in-progress" ? "default" : "outline"}
                       >
