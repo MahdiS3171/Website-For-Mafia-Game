@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>ایجاد بازی جدید</h1>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <h2>بازیکنان و نقش‌ها</h2>
+  {{ formset.management_form }}
+  <table id="formset-table">
+    {% for form in formset %}
+    <tr class="form-row">
+      <td>{{ form.player }}</td>
+      <td>{{ form.role }}</td>
+      <td>{{ form.seat_number }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <button type="button" id="add-row">افزودن بازیکن</button>
+  {% for form in formset %}
+  {% for field in form.visible_fields %}
+    {% for error in field.errors %}
+      <div class="error">{{ field.label }}: {{ error }}</div>
+    {% endfor %}
+  {% endfor %}
+{% endfor %}
+  <button type="submit">ثبت</button>
+</form>
+<script>
+  const addRowBtn = document.getElementById("add-row");
+  const formsetTable = document.getElementById("formset-table");
+  let totalForms = document.getElementById("id_form-TOTAL_FORMS");
+  addRowBtn.addEventListener("click", function () {
+    const formNum = parseInt(totalForms.value);
+    const emptyForm = document.querySelectorAll(".form-row")[0];
+    const newRow = emptyForm.cloneNode(true);
+
+    newRow.querySelectorAll("input, select, textarea").forEach(function (el) {
+        const name = el.name.replace(/-\d+-/, `-${formNum}-`);
+        const id = `id_${name}`;
+        el.name = name;
+        el.id = id;
+        el.value = "";  // reset input value
+    });
+
+    formsetTable.appendChild(newRow);
+    totalForms.value = formNum + 1;
+});
+</script>
+{% endblock %}

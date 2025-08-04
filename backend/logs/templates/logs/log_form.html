@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>ثبت لاگ برای بازی {{ game.id }}</h1>
+<form method="post">
+  {% csrf_token %}
+
+  <label>فاز: </label>
+  <select name="phase">
+    <option value="day">روز</option>
+    <option value="night">شب</option>
+  </select>
+
+  <label>دور: </label>
+  <input type="number" name="round_number" value="1" required>
+  <hr>
+
+  {% for gp in game_players %}
+    <div style="border:1px solid #aaa; padding:10px; margin-bottom:10px;">
+      <strong>صندلی {{ gp.seat_number }} - {{ gp.player.name }}</strong><br>
+
+      <label>اکشن‌ها:</label><br>
+      {% for action_type in action_types %}
+        <div style="margin:5px 0;">
+          <input type="checkbox" name="action_{{ gp.pk }}_{{ action_type.pk }}">
+          {{ action_type.name }}
+
+          <label> → انتخاب هدف(ها):</label>
+          <select name="targets_{{ gp.pk }}_{{ action_type.pk }}[]" multiple>
+            {% for target_gp in game_players %}
+              {% if target_gp != gp %}
+                <option value="{{ target_gp.pk }}">
+                  {{ target_gp.player.name }} (صندلی {{ target_gp.seat_number }})
+                </option>
+              {% endif %}
+            {% endfor %}
+          </select>
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+
+  <button type="submit">ثبت لاگ‌ها</button>
+</form>
+{% endblock %}

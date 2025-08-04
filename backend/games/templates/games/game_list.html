@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>لیست بازی‌ها</h1>
+<ul>
+  {% for game in games %}
+    <li><a href="{% url 'games:detail' game.id %}">{{ game.title }}</a></li>
+  {% endfor %}
+</ul>
+<a href="{% url 'games:create' %}">ایجاد بازی جدید</a>
+{% endblock %}

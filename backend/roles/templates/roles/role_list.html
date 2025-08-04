@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>نقش‌ها</h1>
+<ul>
+  {% for role in roles %}
+    <li>
+      {{ role.name }} - ترتیب شب: {{ role.order }} |
+      <a href="{% url 'roles:edit' role.pk %}">ویرایش</a> |
+      <a href="{% url 'roles:delete' role.pk %}">حذف</a>
+    </li>
+  {% endfor %}
+</ul>
+<a href="{% url 'roles:create' %}">افزودن نقش جدید</a>
+{% endblock %}

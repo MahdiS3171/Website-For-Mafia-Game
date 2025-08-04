@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>بازیکنان</h1>
+<ul>
+  {% for player in players %}
+    <li>{{ player.name }}</li>
+  {% endfor %}
+</ul>
+<a href="{% url 'players:create' %}">افزودن بازیکن جدید</a>
+{% endblock %}

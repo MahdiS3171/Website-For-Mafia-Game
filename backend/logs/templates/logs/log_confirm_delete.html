@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>حذف لاگ</h2>
+<p>آیا از حذف این لاگ اطمینان دارید؟</p>
+<p><strong>{{ log }}</strong></p>
+<form method="post">
+  {% csrf_token %}
+  <button type="submit">بله، حذف شود</button>
+  <a href="{% url 'games:game_detail' log.game.id %}">لغو</a>
+</form>
+{% endblock %}

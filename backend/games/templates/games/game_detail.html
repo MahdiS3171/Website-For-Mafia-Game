@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>جزئیات بازی</h1>
+<p>شناسه بازی: {{ game.id }}</p>
+<p>تاریخ شروع: {{ game.created_at }}</p>
+<a href="{% url 'logs:create' game.id %}">➕ افزودن لاگ جدید</a>
+
+<h2>بازیکنان بازی</h2>
+<ul>
+  {% for gp in game_players %}
+    <li>صندلی {{ gp.seat_number }} - {{ gp.player.name }} - نقش: {{ gp.role.name }}</li>
+  {% endfor %}
+</ul>
+<a href="{% url 'actions:add' game.id %}">➕ افزودن اکشن</a>
+<h2>لاگ‌ها</h2>
+{% for log in game.log_set.all %}
+  <div style="border:1px solid #ccc; margin: 10px; padding:10px;">
+    <strong>{{ log.phase|title }} {{ log.round_number }}</strong> | بازیکن: {{ log.game_player.player.name }} (صندلی {{ log.game_player.seat_number }})<br>
+    اکشن: {{ log.action|linebreaksbr }}<br>
+    {% comment %} <a href="{% url 'logs:delete' log.pk %}">🗑 حذف</a> {% endcomment %}
+  </div>
+{% empty %}
+  <p>هیچ لاگی ثبت نشده است.</p>
+{% endfor %}
+<h2>اکشن‌های بازی</h2>
+{% for action in game.action_set.all %}
+  <div style="border:1px dashed #999; margin: 10px; padding:10px;">
+    <strong>روز {{ action.day_number }}</strong> | 
+    {{ action.performer.player.name }} (صندلی {{ action.performer.seat_number }}) → 
+    {{ action.action_type.name }}
+    <br>
+    هدف‌ها:
+    <ul>
+      {% for t in action.targets.all %}
+        <li>{{ t.player.name }} (صندلی {{ t.seat_number }})</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% empty %}
+  <p>هیچ اکشنی ثبت نشده است.</p>
+{% endfor %}
+{% endblock %}
