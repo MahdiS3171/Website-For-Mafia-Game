@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Game Logging App Color Palette: F8F8F8, F1D6AB, E3B04B, 2B2B28 */
+    --background: 36 13% 97%; /* F8F8F8 */
+    --foreground: 60 5% 17%; /* 2B2B28 */
+
+    --card: 36 13% 97%;
+    --card-foreground: 60 5% 17%;
+
+    --popover: 36 13% 97%;
+    --popover-foreground: 60 5% 17%;
+
+    --primary: 42 67% 56%; /* E3B04B */
+    --primary-foreground: 36 13% 97%;
+
+    --secondary: 41 52% 82%; /* F1D6AB */
+    --secondary-foreground: 60 5% 17%;
+
+    --muted: 41 52% 82%;
+    --muted-foreground: 60 5% 45%;
+
+    --accent: 42 67% 56%;
+    --accent-foreground: 36 13% 97%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 36 13% 97%;
+
+    --border: 41 52% 88%;
+    --input: 41 52% 88%;
+    --ring: 42 67% 56%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 36 13% 97%;
+    --sidebar-foreground: 60 5% 17%;
+    --sidebar-primary: 42 67% 56%;
+    --sidebar-primary-foreground: 36 13% 97%;
+    --sidebar-accent: 41 52% 82%;
+    --sidebar-accent-foreground: 60 5% 17%;
+    --sidebar-border: 41 52% 88%;
+    --sidebar-ring: 42 67% 56%;
+  }
+
+  .dark {
+    --background: 60 5% 17%; /* 2B2B28 */
+    --foreground: 36 13% 97%; /* F8F8F8 */
+
+    --card: 60 5% 17%;
+    --card-foreground: 36 13% 97%;
+
+    --popover: 60 5% 17%;
+    --popover-foreground: 36 13% 97%;
+
+    --primary: 42 67% 56%; /* E3B04B */
+    --primary-foreground: 60 5% 17%;
+
+    --secondary: 60 5% 25%;
+    --secondary-foreground: 36 13% 97%;
+
+    --muted: 60 5% 25%;
+    --muted-foreground: 41 52% 70%;
+
+    --accent: 42 67% 56%;
+    --accent-foreground: 60 5% 17%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 36 13% 97%;
+
+    --border: 60 5% 25%;
+    --input: 60 5% 25%;
+    --ring: 42 67% 56%;
+    --sidebar-background: 60 5% 17%;
+    --sidebar-foreground: 36 13% 97%;
+    --sidebar-primary: 42 67% 56%;
+    --sidebar-primary-foreground: 60 5% 17%;
+    --sidebar-accent: 60 5% 25%;
+    --sidebar-accent-foreground: 36 13% 97%;
+    --sidebar-border: 60 5% 25%;
+    --sidebar-ring: 42 67% 56%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
