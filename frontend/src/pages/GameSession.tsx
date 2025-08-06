@@ -5,20 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Users, Clock, ArrowRight } from "lucide-react";
-import { getGameDetails } from "../lib/api";
-import { GameResponse, NestedPlayer } from "../types";
 
-interface GameAction {
-  name: string;
-  requiresTargets: number;
-  description: string;
-}
+import { getGameDetails, getLogsByGame, completeGame } from "../lib/api";
+import { NestedPlayer, LogResponse } from "../types";
 
 const GameSession = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const { toast } = useToast();
 
-  const [game, setGame] = useState<GameResponse | null>(null);
+  const [players, setPlayers] = useState<NestedPlayer[]>([]);
+  const [logs, setLogs] = useState<LogResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,85 +23,76 @@ const GameSession = () => {
   const [currentPhase, setCurrentPhase] = useState("Day");
   const [round, setRound] = useState(1);
 
-  const availableActions: GameAction[] = [
-    { name: "Vote", requiresTargets: 1, description: "Vote to eliminate a player" },
-    { name: "Accuse", requiresTargets: 1, description: "Accuse someone of being mafia" },
-    { name: "Defend", requiresTargets: 1, description: "Defend another player" },
-    { name: "Investigate", requiresTargets: 1, description: "Investigate a player's role" },
-    { name: "Heal", requiresTargets: 1, description: "Protect a player from elimination" },
-    { name: "Kill", requiresTargets: 1, description: "Mafia action to eliminate" },
-  ];
-
-  // === Fetch game details on mount ===
+  // === Fetch players & logs ===
   useEffect(() => {
-    const fetchGame = async () => {
-      if (!gameId) return;
+    const fetchData = async () => {
       try {
-        const res = await getGameDetails(gameId);
-        setGame(res.data);
+        if (!gameId) return;
+        const [gameRes, logsRes] = await Promise.all([
+          getGameDetails(gameId),
+          getLogsByGame(gameId),
+        ]);
+        setPlayers(gameRes.data.players);
+        setLogs(logsRes.data);
       } catch (err: any) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
     };
-    fetchGame();
+    fetchData();
   }, [gameId]);
 
-  // === Handle Player Selection ===
   const handlePlayerClick = (playerId: string) => {
+    if (!players.find((p) => p.id === playerId)) return;
     setSelectedPlayer(playerId);
-    setSelectedTargets([]); // reset targets
+    setSelectedTargets([]);
   };
 
   const handleTargetSelect = (targetId: string) => {
     if (targetId === selectedPlayer) return;
 
-    setSelectedTargets((prev) =>
-      prev.includes(targetId) ? prev.filter((id) => id !== targetId) : [...prev, targetId]
-    );
+    if (selectedTargets.includes(targetId)) {
+      setSelectedTargets(selectedTargets.filter((id) => id !== targetId));
+    } else {
+      setSelectedTargets([...selectedTargets, targetId]);
+    }
   };
 
-  const executeAction = (action: GameAction) => {
-    if (selectedTargets.length !== action.requiresTargets) {
-      toast({
-        title: "Error",
-        description: `Please select ${action.requiresTargets} target(s) for this action`,
-        variant: "destructive",
-      });
+  const executeAction = (actionType: string) => {
+    if (!selectedPlayer) {
+      toast({ title: "Error", description: "Select a player first", variant: "destructive" });
       return;
     }
 
-    const actingPlayer = game?.players.find((p) => p.id === selectedPlayer)?.name;
-    const targetPlayers = selectedTargets
-      .map((id) => game?.players.find((p) => p.id === id)?.name)
-      .join(", ");
-
     toast({
       title: "Action Executed",
-      description: `${actingPlayer} used "${action.name}" on ${targetPlayers}`,
+      description: `Player ${players.find((p) => p.id === selectedPlayer)?.name} performed ${actionType}`,
     });
 
-    // Reset selections
+    // TODO: POST to /actions/ endpoint when ready
     setSelectedPlayer(null);
     setSelectedTargets([]);
   };
 
   const nextPhase = () => {
-    if (currentPhase === "Day") {
-      setCurrentPhase("Night");
-    } else {
-      setCurrentPhase("Day");
-      setRound((prev) => prev + 1);
+    const newPhase = currentPhase === "Day" ? "Night" : "Day";
+    setCurrentPhase(newPhase);
+    if (newPhase === "Day") setRound(round + 1);
+
+    toast({ title: "Phase Changed", description: `Now entering ${newPhase} phase` });
+  };
+
+  const handleEndGame = async () => {
+    const winner = prompt("Enter winner side (e.g., Mafia, Citizens):");
+    if (!winner) return;
+
+    try {
+      await completeGame(gameId!, winner);
+      toast({ title: "Game Completed", description: `Winner: ${winner}` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
-
-    setSelectedPlayer(null);
-    setSelectedTargets([]);
-
-    toast({
-      title: "Phase Changed",
-      description: `Now entering ${currentPhase === "Day" ? "Night" : "Day"} phase`,
-    });
   };
 
   const getRoleColor = (role?: string) => {
@@ -113,6 +100,7 @@ const GameSession = () => {
       case "mafia":
         return "bg-red-100 text-red-800 border-red-200";
       case "detective":
+      case "sheriff":
         return "bg-blue-100 text-blue-800 border-blue-200";
       case "doctor":
         return "bg-green-100 text-green-800 border-green-200";
@@ -123,30 +111,27 @@ const GameSession = () => {
     }
   };
 
-  // === Loading/Error States ===
   if (loading) {
-    return <div className="text-center py-12 text-muted-foreground">Loading game...</div>;
+    return <div className="text-center py-12 text-muted-foreground">Loading game session...</div>;
   }
 
-  if (error || !game) {
-    return (
-      <div className="text-center py-12 text-red-500">
-        Failed to load game: {error || "Game not found"}
-      </div>
-    );
+  if (error) {
+    return <div className="text-center py-12 text-red-500">Failed to load game: {error}</div>;
   }
 
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <Link
-            to="/games"
-            className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
-          >
+        <div className="mb-6 flex justify-between items-center">
+          <Link to="/games" className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Games
           </Link>
+
+          {/* End Game Button */}
+          <Button variant="destructive" onClick={handleEndGame}>
+            End Game
+          </Button>
         </div>
 
         {/* Game Status */}
@@ -154,7 +139,7 @@ const GameSession = () => {
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <CardTitle className="text-2xl">Game #{game.id}</CardTitle>
+                <CardTitle className="text-2xl">Game #{gameId}</CardTitle>
                 <div className="flex items-center gap-4 mt-2 text-muted-foreground">
                   <span className="flex items-center">
                     <Clock className="w-4 h-4 mr-1" />
@@ -162,7 +147,7 @@ const GameSession = () => {
                   </span>
                   <span className="flex items-center">
                     <Users className="w-4 h-4 mr-1" />
-                    {game.players.filter((p) => p).length} players
+                    {players.length} players
                   </span>
                 </div>
               </div>
@@ -187,17 +172,13 @@ const GameSession = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {game.players.map((player: NestedPlayer) => (
+                  {players.map((player) => (
                     <Card
                       key={player.id}
                       className={`cursor-pointer transition-all hover:shadow-md ${
-                        selectedPlayer === player.id
-                          ? "ring-2 ring-primary shadow-lg"
-                          : ""
+                        selectedPlayer === player.id ? "ring-2 ring-primary shadow-lg" : ""
                       } ${
-                        selectedTargets.includes(player.id)
-                          ? "ring-2 ring-accent"
-                          : ""
+                        selectedTargets.includes(player.id) ? "ring-2 ring-accent" : ""
                       }`}
                       onClick={() =>
                         selectedPlayer
@@ -208,15 +189,11 @@ const GameSession = () => {
                       <CardContent className="p-4 text-center">
                         <div className="mb-2">
                           <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <span className="font-bold text-lg">
-                              {player.seat_number}
-                            </span>
+                            <span className="font-bold text-lg">{player.seat_number}</span>
                           </div>
                           <h3 className="font-semibold text-sm">{player.name}</h3>
                         </div>
-                        <Badge className={getRoleColor(player.role)}>
-                          {player.role || "Unassigned"}
-                        </Badge>
+                        <Badge className={getRoleColor(player.role)}>{player.role || "Unknown"}</Badge>
                       </CardContent>
                     </Card>
                   ))}
@@ -237,7 +214,7 @@ const GameSession = () => {
                     <div className="p-3 bg-secondary rounded-lg">
                       <p className="text-sm font-medium">Selected Player:</p>
                       <p className="text-lg">
-                        {game.players.find((p) => p.id === selectedPlayer)?.name}
+                        {players.find((p) => p.id === selectedPlayer)?.name}
                       </p>
                     </div>
 
@@ -246,7 +223,7 @@ const GameSession = () => {
                         <p className="text-sm font-medium">Target(s):</p>
                         <p>
                           {selectedTargets
-                            .map((id) => game.players.find((p) => p.id === id)?.name)
+                            .map((id) => players.find((p) => p.id === id)?.name)
                             .join(", ")}
                         </p>
                       </div>
@@ -254,29 +231,19 @@ const GameSession = () => {
 
                     <div className="space-y-2">
                       <h4 className="font-medium">Available Actions:</h4>
-                      {availableActions.map((action) => (
-                        <Button
-                          key={action.name}
-                          variant="outline"
-                          className="w-full justify-start"
-                          onClick={() => executeAction(action)}
-                          disabled={selectedTargets.length !== action.requiresTargets}
-                        >
-                          <div className="text-left">
-                            <div className="font-medium">{action.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {action.description}
-                            </div>
-                          </div>
-                        </Button>
-                      ))}
+                      {["Vote", "Accuse", "Defend", "Investigate", "Heal", "Kill"].map(
+                        (action) => (
+                          <Button
+                            key={action}
+                            variant="outline"
+                            className="w-full justify-start"
+                            onClick={() => executeAction(action)}
+                          >
+                            {action}
+                          </Button>
+                        )
+                      )}
                     </div>
-
-                    {selectedTargets.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        Click on other players to select targets for actions
-                      </p>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">

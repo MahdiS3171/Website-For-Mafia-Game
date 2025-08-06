@@ -1,11 +1,12 @@
-from django.urls import path
-from . import views
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import RoleViewSet
+
+router = DefaultRouter()
+router.register(r'', RoleViewSet, basename='role')
 
 app_name = 'roles'
 
 urlpatterns = [
-    path('', views.role_list, name='list'),
-    path('create/', views.role_create, name='create'),
-    path('<int:pk>/edit/', views.role_edit, name='edit'),
-    path('<int:pk>/delete/', views.role_delete, name='delete'),
+    path('', include(router.urls)),
 ]

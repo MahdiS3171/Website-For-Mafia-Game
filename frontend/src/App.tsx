@@ -24,7 +24,11 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Public routes (non-authenticated) */}
+          {/* Public routes */}
+          <Route path="/results" element={<Results />} />
+          <Route path="/results/:gameId" element={<Results />} />
+
+          {/* Login route (only for non-authenticated) */}
           <Route
             path="/login"
             element={
@@ -33,16 +37,8 @@ const App = () => (
               </PublicOnlyRoute>
             }
           />
-          <Route
-            path="/results/:gameId"
-            element={
-              <PublicOnlyRoute>
-                <Results />
-              </PublicOnlyRoute>
-            }
-          />
 
-          {/* Protected routes (authenticated) */}
+          {/* Protected routes (admin-only) */}
           <Route
             path="/"
             element={
@@ -84,7 +80,7 @@ const App = () => (
             }
           />
 
-          {/* 404 */}
+          {/* 404 fallback */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

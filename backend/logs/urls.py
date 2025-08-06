@@ -1,32 +1,15 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import GamePhaseViewSet, DaySpeechViewSet
+from .views import LogViewSet, GamePhaseViewSet, DaySpeechViewSet
 
-from django.urls import path
-from . import views
-
-# router = DefaultRouter()
-# router.register(r'phases', GamePhaseViewSet)
-# router.register(r'speeches', DaySpeechViewSet)
-
-# urlpatterns = [
-#     path('', include(router.urls)),
-# ]
-
-# app_name = 'logs'
-
-# urlpatterns = [
-#     path('day/<int:pk>/', views.day_phase_log, name='day'),
-#     path('night/<int:pk>/', views.night_phase_log, name='night'),
-# ]
-
-from django.urls import path
-from . import views
+# DRF Router for automatic CRUD endpoints
+router = DefaultRouter()
+router.register(r'', LogViewSet, basename='log')                 # /api/logs/
+router.register(r'phases', GamePhaseViewSet, basename='gamephase')  # /api/logs/phases/
+router.register(r'day-speeches', DaySpeechViewSet, basename='dayspeech')  # /api/logs/day-speeches/
 
 app_name = 'logs'
 
 urlpatterns = [
-    path('create/<int:game_id>/', views.create_log, name='create'),
-    # path('create/<int:game_id>/', views.log_create, name='create'),
-    # path('<int:pk>/delete/', views.log_delete, name='delete'),
+    path('', include(router.urls)),
 ]

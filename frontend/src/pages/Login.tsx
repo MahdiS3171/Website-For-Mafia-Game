@@ -9,7 +9,8 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 
 interface LoginResponse {
-  token: string;
+  access: string;
+  refresh: string;
   username: string;
   isAdmin: boolean;
 }
@@ -27,11 +28,12 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // Call backend auth endpoint (adjust URL to match your Django route)
-      const res = await api.post<LoginResponse>("/auth/login/", { username, password });
+      // Adjust URL based on your backend route
+      const res = await api.post<LoginResponse>("/accounts/token/", { username, password });
 
-      // Save token & user info
-      localStorage.setItem("token", res.data.token);
+      // Save tokens & user info
+      localStorage.setItem("token", res.data.access);
+      localStorage.setItem("refreshToken", res.data.refresh);
       localStorage.setItem("adminUsername", res.data.username);
       localStorage.setItem("isAdmin", res.data.isAdmin.toString());
 
@@ -54,16 +56,18 @@ const Login = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("refreshToken");
     localStorage.removeItem("isAdmin");
     localStorage.removeItem("adminUsername");
+
     toast({
       title: "Logged Out",
       description: "You have been logged out successfully",
     });
-    navigate("/");
+
+    navigate("/login");
   };
 
-  // Check if already logged in
   const isLoggedIn = localStorage.getItem("token") !== null;
 
   if (isLoggedIn) {

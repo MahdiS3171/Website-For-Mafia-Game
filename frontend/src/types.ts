@@ -29,40 +29,40 @@ export interface GamePlayer {
 }
 
 // =======================
-// Nested Player Type (used in Game details)
-// =======================
-export interface NestedPlayer {
-  id: string;
-  name: string;
-  role?: string;
-  seat_number: number;
-  game?: string;       // Optional: some endpoints include game ID
-}
-
-// =======================
 // Game Types
 // =======================
 export interface Game {
   id: string;
   date: string;        // maps to created_at in backend
-  is_active: boolean;  // true = ongoing, false = completed
+  status: "completed" | "in-progress"; // derived from is_active
+  is_active: boolean;
   players?: NestedPlayer[];
 }
 
-// Unified response type for both single and list game fetches
-export interface GameResponse extends Game {}
+export interface NestedPlayer {
+  id: string;
+  name: string;
+  role?: string;
+  seat_number: number;
+}
 
 // =======================
-// Player API Response
+// API Response Types
 // =======================
+export interface GameResponse {
+  id: string;
+  date: string;
+  status: string;
+  is_active: boolean;
+  players: NestedPlayer[];
+}
+
+
 export interface PlayerResponse {
   id: string;
   name: string;
 }
 
-// =======================
-// GamePlayer API Response
-// =======================
 export interface GamePlayerResponse {
   id: string;
   game: string;
@@ -81,4 +81,36 @@ export interface Action {
   type: string;        // e.g., "vote", "kill", "protect"
   target?: string;     // ID of the target player (if any)
   timestamp: string;   // ISO date string
+}
+
+// =======================
+// Log Types (for Results page)
+// =======================
+export interface LogResponse {
+  id: string;
+  game: string;           // Game ID
+  game_player: string;    // Player ID (actor)
+  action_type: { id: string; name: string }; // Action type info
+  targets: string[];      // IDs of target players
+  phase: "day" | "night";
+  round_number: number;
+  created_at: string;     // ISO timestamp
+}
+
+
+export interface GamePhaseResponse {
+  id: string;
+  game: string;
+  phase_type: "day" | "night";
+  number: number;
+  start_time: string;
+}
+
+export interface DaySpeechResponse {
+  id: string;
+  phase: string;           // Phase ID
+  speaker: string;         // GamePlayer ID
+  order: number;
+  content: string;
+  started_at: string;
 }

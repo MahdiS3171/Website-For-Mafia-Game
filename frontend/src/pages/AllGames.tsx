@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Calendar, Users, Trophy } from "lucide-react";
+import { ArrowLeft, Calendar, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getGames } from "../lib/api";
-import { Game } from "../types";
+import { GameResponse } from "../types";
 
 const AllGames = () => {
-  const [games, setGames] = useState<Game[]>([]);
+  const [games, setGames] = useState<GameResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,12 +17,8 @@ const AllGames = () => {
       try {
         const res = await getGames();
         setGames(res.data);
-      } catch (err) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError("An unexpected error occurred.");
-        }
+      } catch (err: any) {
+        setError(err.message);
       } finally {
         setLoading(false);
       }
@@ -31,17 +27,10 @@ const AllGames = () => {
     fetchGames();
   }, []);
 
-  const getStatusColor = (status: Game["status"]) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "in-progress":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case "abandoned":
-        return "bg-red-100 text-red-800 border-red-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
+  const getStatusColor = (isActive: boolean) => {
+    return isActive
+      ? "bg-blue-100 text-blue-800 border-blue-200"
+      : "bg-green-100 text-green-800 border-green-200";
   };
 
   if (loading) {
@@ -68,9 +57,7 @@ const AllGames = () => {
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl font-bold">All Games</CardTitle>
-            <CardDescription>
-              View all games that have been created
-            </CardDescription>
+            <CardDescription>View all games (active and completed)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -79,8 +66,8 @@ const AllGames = () => {
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
                       <CardTitle className="text-lg">Game #{game.id}</CardTitle>
-                      <Badge className={getStatusColor(game.status)}>
-                        {game.status.replace("-", " ")}
+                      <Badge className={getStatusColor(game.is_active)}>
+                        {game.is_active ? "In Progress" : "Completed"}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -92,31 +79,18 @@ const AllGames = () => {
 
                     <div className="flex items-center text-sm text-muted-foreground">
                       <Users className="w-4 h-4 mr-2" />
-                      {game.playerCount} players
+                      {game.players.length} players
                     </div>
-
-                    {game.winner && (
-                      <div className="flex items-center text-sm text-muted-foreground">
-                        <Trophy className="w-4 h-4 mr-2" />
-                        Winner: {game.winner}
-                      </div>
-                    )}
-
-                    {game.duration && (
-                      <div className="text-sm text-muted-foreground">
-                        Duration: {game.duration}
-                      </div>
-                    )}
 
                     <div className="flex gap-2 mt-4">
                       <Button
                         asChild
                         size="sm"
                         className="flex-1"
-                        variant={game.status === "in-progress" ? "default" : "outline"}
+                        variant={game.is_active ? "default" : "outline"}
                       >
                         <Link to={`/game/${game.id}`}>
-                          {game.status === "in-progress" ? "Continue" : "View"}
+                          {game.is_active ? "Continue" : "View"}
                         </Link>
                       </Button>
                     </div>
@@ -127,9 +101,8 @@ const AllGames = () => {
 
             {games.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
-                <Trophy className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p className="text-lg">No games found</p>
-                <p>Create your first game to get started!</p>
+                <p>Create a new game to get started!</p>
               </div>
             )}
           </CardContent>

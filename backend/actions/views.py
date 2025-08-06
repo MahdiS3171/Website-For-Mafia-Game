@@ -1,18 +1,16 @@
-from django.shortcuts import render, redirect, get_object_or_404
+from rest_framework import viewsets
 from .models import Action
-from .forms import ActionForm
-from games.models import Game
+from .serializers import ActionSerializer
 
-def add_action(request, game_id):
-    game = get_object_or_404(Game, pk=game_id)
-    if request.method == 'POST':
-        form = ActionForm(request.POST, game=game)
-        if form.is_valid():
-            action = form.save(commit=False)
-            action.game = game
-            action.save()
-            form.save_m2m()
-            return redirect('games:detail', game_id=game.id)
-    else:
-        form = ActionForm(game=game)
-    return render(request, 'actions/add_action.html', {'form': form, 'game': game})
+class ActionViewSet(viewsets.ModelViewSet):
+    serializer_class = ActionSerializer
+
+    def get_queryset(self):
+        """
+        Allow filtering actions by game ID via ?game=<id>
+        """
+        queryset = Action.objects.all()
+        game_id = self.request.query_params.get('game')
+        if game_id:
+            queryset = queryset.filter(game_id=game_id)
+        return queryset

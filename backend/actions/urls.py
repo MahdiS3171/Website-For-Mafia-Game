@@ -1,10 +1,12 @@
-# actions/urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import ActionViewSet
 
-from django.urls import path
-from . import views
+router = DefaultRouter()
+router.register(r'', ActionViewSet, basename='action')
 
 app_name = 'actions'
 
 urlpatterns = [
-    path('add/<int:game_id>/', views.add_action, name='add'),
+    path('', include(router.urls)),
 ]

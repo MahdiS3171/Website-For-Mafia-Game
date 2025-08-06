@@ -5,6 +5,9 @@ import {
   GamePlayerResponse,
   PlayerResponse,
   Action,
+  LogResponse,
+  GamePhaseResponse,
+  DaySpeechResponse,
 } from "../types";
 
 // =======================
@@ -26,7 +29,7 @@ export const getGameDetails = (id: string) =>
   api.get<GameResponse>(`/games/${id}/`);
 
 /** Create a new game */
-export const createGame = (data: { name?: string; date: string }) =>
+export const createGame = (data: { is_active?: boolean }) =>
   api.post<GameResponse>("/games/", data);
 
 // =======================
@@ -61,5 +64,36 @@ export const createPlayer = (data: { name: string }) =>
 // =======================
 
 /** Get all actions for a specific game */
+
 export const getActionsByGame = (gameId: string) =>
-  api.get<Action[]>(`/actions/?game=${gameId}`);
+  api.get<LogResponse[]>(`/actions/?game=${gameId}`);
+
+
+// =======================
+// Logs API
+// =======================
+
+/** Get all logs for a specific game */
+export const getLogsByGame = (gameId: string) =>
+  api.get<LogResponse[]>(`/logs/?game=${gameId}`);
+
+// =======================
+// Game Phases API
+// =======================
+
+/** Get phases (day/night) for a game */
+export const getPhasesByGame = (gameId: string) =>
+  api.get<GamePhaseResponse[]>(`/logs/phases/?game=${gameId}`);
+
+// =======================
+// Day Speeches API
+// =======================
+
+/** Get speeches for a specific game phase */
+export const getDaySpeeches = (phaseId: string) =>
+  api.get<DaySpeechResponse[]>(`/logs/day-speeches/?phase=${phaseId}`);
+
+
+/** Mark game as complete and set winner */
+export const completeGame = (gameId: string, winner: string) =>
+  api.post(`/games/${gameId}/complete/`, { winner });
