@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Users, Clock, ArrowRight } from "lucide-react";
 
-import { getGameDetails, getLogsByGame, completeGame } from "../lib/api";
+import { getGameDetails, getLogsByGame, completeGame, createLog } from "../lib/api";
 import { NestedPlayer, LogResponse } from "../types";
 
 const GameSession = () => {
@@ -59,20 +59,69 @@ const GameSession = () => {
     }
   };
 
-  const executeAction = (actionType: string) => {
+  const actionConfigs = [
+    { id: "target", name: "Target", tags: ["target"], separatePerTarget: true, phase: "day" },
+    { id: "cover", name: "Cover", tags: ["target"], separatePerTarget: true, phase: "day" },
+    { id: "siding", name: "Siding", tags: ["side"], phase: "day" },
+    { id: "dialogue", name: "Dialogue", tags: ["target"], phase: "day" },
+    { id: "terror", name: "Terror", tags: ["target", "guard", "save"], phase: "night" },
+    { id: "killer_target", name: "Killer Target", tags: ["mafia_suggest", "city_saviour", "city_suggest", "killer_kill"], phase: "night" },
+    { id: "doctors_save", name: "Doctor's Save", tags: ["save1", "save2"], phase: "night" },
+  ];
+
+  const executeAction = async (actionId: string) => {
     if (!selectedPlayer) {
       toast({ title: "Error", description: "Select a player first", variant: "destructive" });
       return;
     }
 
-    toast({
-      title: "Action Executed",
-      description: `Player ${players.find((p) => p.id === selectedPlayer)?.name} performed ${actionType}`,
-    });
+    const action = actionConfigs.find((a) => a.id === actionId);
+    if (!action) return;
 
-    // TODO: POST to /actions/ endpoint when ready
-    setSelectedPlayer(null);
-    setSelectedTargets([]);
+    try {
+      if (action.separatePerTarget) {
+        for (const targetId of selectedTargets) {
+          await createLog({
+            game: gameId!,
+            game_player: selectedPlayer,
+            action_type: action.id,
+            targets: [{ target: targetId, tag: action.tags[0] }],
+            phase: currentPhase.toLowerCase() as "day" | "night",
+            round_number: round,
+          });
+        }
+      } else {
+        if (action.tags.length && selectedTargets.length !== action.tags.length) {
+          toast({
+            title: "Invalid targets",
+            description: `This action requires ${action.tags.length} targets`,
+            variant: "destructive",
+          });
+          return;
+        }
+        const targets = selectedTargets.map((id, idx) => ({ target: id, tag: action.tags[idx] }));
+        await createLog({
+          game: gameId!,
+          game_player: selectedPlayer,
+          action_type: action.id,
+          targets,
+          phase: currentPhase.toLowerCase() as "day" | "night",
+          round_number: round,
+        });
+      }
+
+      toast({
+        title: "Action Logged",
+        description: `${action.name} recorded for ${players.find((p) => p.id === selectedPlayer)?.name}`,
+      });
+      const logsRes = await getLogsByGame(gameId!);
+      setLogs(logsRes.data);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSelectedPlayer(null);
+      setSelectedTargets([]);
+    }
   };
 
   const nextPhase = () => {
@@ -231,18 +280,18 @@ const GameSession = () => {
 
                     <div className="space-y-2">
                       <h4 className="font-medium">Available Actions:</h4>
-                      {["Vote", "Accuse", "Defend", "Investigate", "Heal", "Kill"].map(
-                        (action) => (
+                      {actionConfigs
+                        .filter((a) => a.phase.toLowerCase() === currentPhase.toLowerCase())
+                        .map((action) => (
                           <Button
-                            key={action}
+                            key={action.id}
                             variant="outline"
                             className="w-full justify-start"
-                            onClick={() => executeAction(action)}
+                            onClick={() => executeAction(action.id)}
                           >
-                            {action}
+                            {action.name}
                           </Button>
-                        )
-                      )}
+                        ))}
                     </div>
                   </div>
                 ) : (

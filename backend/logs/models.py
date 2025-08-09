@@ -14,13 +14,42 @@ from roles.models import Role
 #         return f"{self.phase.title()} {self.round_number} - {self.game_player.player.name}"
     
 class Log(models.Model):
+    """Generic log entry for any in-game action.
+
+    The previous implementation only kept a list of target ``GamePlayer``
+    instances which made it impossible to distinguish between actions that
+    required multiple targets with different meanings (e.g. the *terror*
+    action which has a ``target``, ``guard`` and ``save`` player).  To make the
+    logging flexible enough for all of the actions described in the user
+    requirements we introduce a small through model ``LogTarget`` which allows
+    us to store an optional ``tag`` for every target.  In addition a ``details``
+    JSON field is added so actions like "k of n" or "claim" can keep arbitrary
+    extra information.
+    """
+
     game = models.ForeignKey(Game, on_delete=models.CASCADE)
     game_player = models.ForeignKey(GamePlayer, on_delete=models.CASCADE)
     action_type = models.ForeignKey('actions.ActionType', on_delete=models.CASCADE)
-    targets = models.ManyToManyField(GamePlayer, related_name='logs_targeted')
+    targets = models.ManyToManyField(
+        GamePlayer,
+        through='LogTarget',
+        related_name='logs_targeted'
+    )
     phase = models.CharField(max_length=10, choices=[('day', 'روز'), ('night', 'شب')])
     round_number = models.PositiveIntegerField()
+    details = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class LogTarget(models.Model):
+    """Through table storing the meaning/tag of each target in a log."""
+
+    log = models.ForeignKey('Log', on_delete=models.CASCADE, related_name='log_targets')
+    target = models.ForeignKey(GamePlayer, on_delete=models.CASCADE)
+    tag = models.CharField(max_length=50, blank=True, null=True)
+
+    class Meta:
+        unique_together = ('log', 'target', 'tag')
 
 class GamePhase(models.Model):
     game = models.ForeignKey(Game, on_delete=models.CASCADE)

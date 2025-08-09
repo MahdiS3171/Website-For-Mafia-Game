@@ -77,6 +77,17 @@ export const getActionsByGame = (gameId: string) =>
 export const getLogsByGame = (gameId: string) =>
   api.get<LogResponse[]>(`/logs/?game=${gameId}`);
 
+/** Create a new log entry */
+export const createLog = (data: {
+  game: string;
+  game_player: string;
+  action_type: string;
+  targets?: { target: string; tag?: string }[];
+  phase: "day" | "night";
+  round_number: number;
+  details?: any;
+}) => api.post<LogResponse>("/logs/", data);
+
 // =======================
 // Game Phases API
 // =======================

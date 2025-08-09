@@ -87,12 +87,29 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('phase', models.CharField(choices=[('day', 'روز'), ('night', 'شب')], max_length=10)),
                 ('round_number', models.PositiveIntegerField()),
+                ('details', models.JSONField(blank=True, default=dict)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('action_type', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='actions.actiontype')),
                 ('game', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='games.game')),
                 ('game_player', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='games.gameplayer')),
-                ('targets', models.ManyToManyField(related_name='logs_targeted', to='games.gameplayer')),
             ],
+        ),
+        migrations.CreateModel(
+            name='LogTarget',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('tag', models.CharField(blank=True, max_length=50, null=True)),
+                ('log', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='log_targets', to='logs.log')),
+                ('target', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='games.gameplayer')),
+            ],
+            options={
+                'unique_together': {('log', 'target', 'tag')},
+            },
+        ),
+        migrations.AddField(
+            model_name='log',
+            name='targets',
+            field=models.ManyToManyField(related_name='logs_targeted', through='logs.LogTarget', to='games.gameplayer'),
         ),
         migrations.CreateModel(
             name='NightAction',
