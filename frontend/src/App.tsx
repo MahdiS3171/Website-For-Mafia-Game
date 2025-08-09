@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
-import PublicOnlyRoute from "./components/PublicOnlyRoute";
 import Index from "./pages/Index";
 import AddPlayer from "./pages/AddPlayer";
 import CreateGame from "./pages/CreateGame";
@@ -23,18 +22,10 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Public routes - only accessible to non-admin users */}
-          <Route path="/results" element={
-            <PublicOnlyRoute>
-              <Results />
-            </PublicOnlyRoute>
-          } />
-          <Route path="/results/:gameId" element={
-            <PublicOnlyRoute>
-              <Results />
-            </PublicOnlyRoute>
-          } />
-          
+          {/* Results page accessible to all users */}
+          <Route path="/results" element={<Results />} />
+          <Route path="/results/:gameId" element={<Results />} />
+
           {/* Root route - redirect based on authentication */}
           <Route path="/" element={
             <ProtectedRoute>
