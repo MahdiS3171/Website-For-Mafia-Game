@@ -2,8 +2,6 @@ from django.db import migrations
 
 def create_action_types(apps, schema_editor):
     ActionType = apps.get_model('actions', 'ActionType')
-    # Remove any legacy records created before slugs were introduced
-    ActionType.objects.filter(slug__isnull=True).delete()
     actions = [
         ("Fling Target", "fling_target", "day"),
         ("Target", "target", "day"),
@@ -28,7 +26,10 @@ def create_action_types(apps, schema_editor):
         ("Doctor's Save", "doctors_save", "night"),
     ]
     for name, slug, phase in actions:
-        ActionType.objects.update_or_create(slug=slug, defaults={"name": name, "phase": phase})
+        ActionType.objects.update_or_create(
+            name=name,
+            defaults={"slug": slug, "phase": phase},
+        )
 
 class Migration(migrations.Migration):
     dependencies = [
