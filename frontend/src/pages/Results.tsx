@@ -49,8 +49,9 @@ const Results = () => {
 
           setGames(completed);
         }
-      } catch (err: any) {
-        setError(err.message || "Failed to load results");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message || "Failed to load results");
       } finally {
         setLoading(false);
       }
