@@ -34,8 +34,12 @@ const GameSession = () => {
         ]);
         setPlayers(gameRes.data.players);
         setLogs(logsRes.data);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("An unknown error occurred");
+        }
       } finally {
         setLoading(false);
       }
@@ -116,8 +120,9 @@ const GameSession = () => {
       });
       const logsRes = await getLogsByGame(gameId!);
       setLogs(logsRes.data);
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const description = err instanceof Error ? err.message : "An unknown error occurred";
+      toast({ title: "Error", description, variant: "destructive" });
     } finally {
       setSelectedPlayer(null);
       setSelectedTargets([]);
@@ -139,8 +144,9 @@ const GameSession = () => {
     try {
       await completeGame(gameId!, winner);
       toast({ title: "Game Completed", description: `Winner: ${winner}` });
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const description = err instanceof Error ? err.message : "An unknown error occurred";
+      toast({ title: "Error", description, variant: "destructive" });
     }
   };
 
