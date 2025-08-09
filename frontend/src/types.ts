@@ -86,14 +86,21 @@ export interface Action {
 // =======================
 // Log Types (for Results page)
 // =======================
+export interface TargetInfo {
+  target: string;       // GamePlayer ID
+  player_name: string;  // Convenience name of the player
+  tag?: string;         // Optional tag describing the relation (e.g. "guard")
+}
+
 export interface LogResponse {
   id: string;
   game: string;           // Game ID
   game_player: string;    // Player ID (actor)
-  action_type: { id: string; name: string }; // Action type info
-  targets: string[];      // IDs of target players
+  action_type: { id: string; name: string } | string; // Action type info
+  targets: TargetInfo[];  // Detailed target information
   phase: "day" | "night";
   round_number: number;
+  details?: any;          // Additional info (k/n, chosen role, ...)
   created_at: string;     // ISO timestamp
 }
 

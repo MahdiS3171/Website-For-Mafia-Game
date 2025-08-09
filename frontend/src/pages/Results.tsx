@@ -138,9 +138,13 @@ const Results = () => {
   const uniqueActions = actions.map((log) => ({
     timestamp: new Date(log.created_at).toLocaleTimeString(),
     actor: players.find((p) => p.id === log.game_player.toString())?.name || "Unknown",
-    type: log.action_type.name || log.action_type, // handle name field or fallback
+    type: typeof log.action_type === "string" ? log.action_type : log.action_type.name,
     targets: log.targets
-      .map((targetId) => players.find((p) => p.id === targetId.toString())?.name || "Unknown")
+      .map((t) => {
+        const playerName =
+          players.find((p) => p.id === t.target.toString())?.name || t.player_name || "Unknown";
+        return t.tag ? `${playerName} (${t.tag})` : playerName;
+      })
       .join(", "),
     phase: log.phase,
     round: log.round_number,
