@@ -24,8 +24,9 @@ const CreateGame = () => {
 
       // Navigate to the new game's session page
       navigate(`/game/${game.id}`);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
