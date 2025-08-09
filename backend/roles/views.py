@@ -1,6 +1,13 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from .models import Role
 from .forms import RoleForm
+from rest_framework import viewsets
+from .serializers import RoleSerializer
+
+
+class RoleViewSet(viewsets.ModelViewSet):
+    queryset = Role.objects.all().order_by('order')
+    serializer_class = RoleSerializer
 
 
 def role_list(request):

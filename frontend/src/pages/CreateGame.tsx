@@ -5,37 +5,34 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ArrowLeft, Plus, Trash2, Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { usePlayers, useRoles, useCreateGame, useCreateGamePlayer } from "../hooks/useApi";
+import { Player, Role } from "../types/api";
 
 interface GamePlayer {
   id: string;
   playerId: string;
   playerName: string;
   seatNumber: number;
-  role: string;
+  roleId: string;
+  roleName: string;
 }
 
 const CreateGame = () => {
+  const [gameTitle, setGameTitle] = useState("");
   const [gamePlayers, setGamePlayers] = useState<GamePlayer[]>([]);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  // Mock data - replace with actual database calls
-  const availablePlayers = [
-    { id: "1", name: "John Doe" },
-    { id: "2", name: "Jane Smith" },
-    { id: "3", name: "Mike Johnson" },
-    { id: "4", name: "Sarah Wilson" },
-  ];
+  // API hooks
+  const { data: playersResponse, isLoading: playersLoading } = usePlayers();
+  const { data: rolesResponse, isLoading: rolesLoading } = useRoles();
+  const createGameMutation = useCreateGame();
+  const createGamePlayerMutation = useCreateGamePlayer();
 
-  const availableRoles = [
-    "Mafia",
-    "Citizen",
-    "Doctor",
-    "Detective",
-    "Godfather",
-    "Sheriff",
-  ];
+  const availablePlayers = playersResponse?.results || [];
+  const availableRoles = rolesResponse?.results || [];
 
   const addPlayer = () => {
     const newPlayer: GamePlayer = {
@@ -43,7 +40,8 @@ const CreateGame = () => {
       playerId: "",
       playerName: "",
       seatNumber: gamePlayers.length + 1,
-      role: "",
+      roleId: "",
+      roleName: "",
     };
     setGamePlayers([...gamePlayers, newPlayer]);
   };
@@ -59,14 +57,31 @@ const CreateGame = () => {
   };
 
   const handlePlayerSelect = (id: string, playerId: string) => {
-    const selectedPlayer = availablePlayers.find(p => p.id === playerId);
+    const selectedPlayer = availablePlayers.find(p => p.id.toString() === playerId);
     if (selectedPlayer) {
       updatePlayer(id, "playerId", playerId);
       updatePlayer(id, "playerName", selectedPlayer.name);
     }
   };
 
-  const createGame = () => {
+  const handleRoleSelect = (id: string, roleId: string) => {
+    const selectedRole = availableRoles.find(r => r.id.toString() === roleId);
+    if (selectedRole) {
+      updatePlayer(id, "roleId", roleId);
+      updatePlayer(id, "roleName", selectedRole.name);
+    }
+  };
+
+  const createGame = async () => {
+    if (!gameTitle.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a game title",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (gamePlayers.length === 0) {
       toast({
         title: "Error",
@@ -76,7 +91,7 @@ const CreateGame = () => {
       return;
     }
 
-    const incompletePlayer = gamePlayers.find(p => !p.playerId || !p.role);
+    const incompletePlayer = gamePlayers.find(p => !p.playerId || !p.roleId);
     if (incompletePlayer) {
       toast({
         title: "Error",
@@ -86,12 +101,51 @@ const CreateGame = () => {
       return;
     }
 
-    // TODO: Create game in database
-    toast({
-      title: "Success",
-      description: "Game created successfully!",
-    });
+    try {
+      // Create the game
+      const game = await createGameMutation.mutateAsync({
+        title: gameTitle.trim(),
+        is_active: true,
+      });
+
+      // Add players to the game
+      for (const gamePlayer of gamePlayers) {
+        await createGamePlayerMutation.mutateAsync({
+          game: game.id,
+          player: parseInt(gamePlayer.playerId),
+          role: parseInt(gamePlayer.roleId),
+          seat_number: gamePlayer.seatNumber,
+        });
+      }
+
+      toast({
+        title: "Success",
+        description: "Game created successfully!",
+      });
+
+      // Navigate to the game detail page
+      navigate(`/game/${game.id}`);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create game",
+        variant: "destructive",
+      });
+    }
   };
+
+  if (playersLoading || rolesLoading) {
+    return (
+      <div className="min-h-screen bg-background p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <span className="ml-2">Loading data...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-4">
@@ -111,6 +165,18 @@ const CreateGame = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="gameTitle">Game Title</Label>
+              <Input
+                id="gameTitle"
+                type="text"
+                placeholder="Enter game title"
+                value={gameTitle}
+                onChange={(e) => setGameTitle(e.target.value)}
+                className="w-full"
+              />
+            </div>
+
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">Game Players</h3>
               <Button onClick={addPlayer} size="sm">
@@ -131,8 +197,8 @@ const CreateGame = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {availablePlayers.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.name}
+                            <SelectItem key={p.id} value={p.id.toString()}>
+                              {p.nickname || p.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -151,14 +217,14 @@ const CreateGame = () => {
 
                     <div className="space-y-2">
                       <Label>Role</Label>
-                      <Select onValueChange={(value) => updatePlayer(player.id, "role", value)}>
+                      <Select onValueChange={(value) => handleRoleSelect(player.id, value)}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select role" />
                         </SelectTrigger>
                         <SelectContent>
                           {availableRoles.map((role) => (
-                            <SelectItem key={role} value={role}>
-                              {role}
+                            <SelectItem key={role.id} value={role.id.toString()}>
+                              {role.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -183,8 +249,20 @@ const CreateGame = () => {
               </div>
             )}
 
-            <Button onClick={createGame} className="w-full" size="lg">
-              Create Game
+            <Button 
+              onClick={createGame} 
+              className="w-full" 
+              size="lg"
+              disabled={createGameMutation.isPending}
+            >
+              {createGameMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating Game...
+                </>
+              ) : (
+                "Create Game"
+              )}
             </Button>
           </CardContent>
         </Card>

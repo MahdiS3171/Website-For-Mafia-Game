@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { UserPlus, Gamepad2, Trophy, BarChart3, Users, Target, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import ApiTest from "@/components/ApiTest";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -48,6 +49,11 @@ const Index = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-12">
+        {/* API Test Section */}
+        <div className="mb-8 flex justify-center">
+          <ApiTest />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Add Player */}
           <Card className="group hover:shadow-lg transition-all duration-200 hover:-translate-y-1">

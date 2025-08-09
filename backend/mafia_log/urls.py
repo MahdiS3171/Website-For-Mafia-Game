@@ -16,6 +16,22 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from games.views import GameViewSet, GamePlayerViewSet
+from players.views import PlayerViewSet
+from roles.views import RoleViewSet
+from logs.views import LogViewSet
+from actions.views import ActionViewSet, ActionTypeViewSet
+
+# API Router
+router = DefaultRouter()
+router.register(r'api/games', GameViewSet)
+router.register(r'api/game-players', GamePlayerViewSet)
+router.register(r'api/players', PlayerViewSet)
+router.register(r'api/roles', RoleViewSet)
+router.register(r'api/logs', LogViewSet)
+router.register(r'api/actions', ActionViewSet)
+router.register(r'api/action-types', ActionTypeViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -24,5 +40,6 @@ urlpatterns = [
     path('games/', include('games.urls')),
     path('logs/', include('logs.urls')),
     path('actions/', include('actions.urls')),
+    path('', include(router.urls)),
 ]
 

@@ -1,6 +1,6 @@
 from rest_framework import viewsets
-from .models import GamePhase, DaySpeech
-from .serializers import GamePhaseSerializer, DaySpeechSerializer
+from .models import GamePhase, DaySpeech, Log
+from .serializers import GamePhaseSerializer, DaySpeechSerializer, LogSerializer
 
 from django.shortcuts import render, redirect, get_object_or_404
 from .models import DayPhase, NightPhase
@@ -8,12 +8,15 @@ from .forms import DayPhaseForm, NightPhaseForm
 from django.http import Http404
 
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import Log
 from .forms import LogForm
 from games.models import Game, GamePlayer
 
 from actions.models import ActionType
 from django.contrib import messages
+
+class LogViewSet(viewsets.ModelViewSet):
+    queryset = Log.objects.all()
+    serializer_class = LogSerializer
 
 def create_log(request, game_id):
     game = get_object_or_404(Game, pk=game_id)
