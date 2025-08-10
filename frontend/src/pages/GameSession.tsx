@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Users, Clock, ArrowRight } from "lucide-react";
 
-import { getGameDetails, getLogsByGame, completeGame, createLog } from "../lib/api";
+import { getGameDetails, getLogsByGame, completeGame, createLog, getActionTypes, advancePhase, terminatePlayers } from "../lib/api";
 import { NestedPlayer, LogResponse } from "../types";
 
 const GameSession = () => {
@@ -22,6 +24,9 @@ const GameSession = () => {
   const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
   const [currentPhase, setCurrentPhase] = useState("Day");
   const [round, setRound] = useState(1);
+  const [actionTypes, setActionTypes] = useState<any[]>([]);
+  const [showElimination, setShowElimination] = useState(false);
+  const [toEliminate, setToEliminate] = useState<string[]>([]);
 
   // === Fetch players & logs ===
   useEffect(() => {
@@ -82,6 +87,21 @@ const GameSession = () => {
     const action = actionConfigs.find((a) => a.id === actionId);
     if (!action) return;
 
+    const details: any = {};
+    const backendType = actionTypes.find((x:any) => x.slug === actionId);
+    if (backendType?.config?.choose_role) {
+      const r = prompt('Type the claimed role name');
+      if (!r) return; details.chosen_role = r;
+    }
+    if (backendType?.config?.params?.includes('k')) {
+      const kStr = prompt('Enter k (number)');
+      if (!kStr) return; details.k = Number(kStr);
+    }
+    if (backendType?.config?.params?.includes('n')) {
+      const nStr = prompt('Enter n (number)');
+      if (!nStr) return; details.n = Number(nStr);
+    }
+
     try {
       if (action.separatePerTarget) {
         for (const targetId of selectedTargets) {
@@ -92,7 +112,7 @@ const GameSession = () => {
             targets: [{ target: targetId, tag: action.tags[0] }],
             phase: currentPhase.toLowerCase() as "day" | "night",
             round_number: round,
-          });
+          , details });
         }
       } else {
         if (action.tags.length && selectedTargets.length !== action.tags.length) {
@@ -100,7 +120,7 @@ const GameSession = () => {
             title: "Invalid targets",
             description: `This action requires ${action.tags.length} targets`,
             variant: "destructive",
-          });
+          , details });
           return;
         }
         const targets = selectedTargets.map((id, idx) => ({ target: id, tag: action.tags[idx] }));
@@ -111,7 +131,7 @@ const GameSession = () => {
           targets,
           phase: currentPhase.toLowerCase() as "day" | "night",
           round_number: round,
-        });
+        , details });
       }
 
       toast({
@@ -129,12 +149,12 @@ const GameSession = () => {
     }
   };
 
-  const nextPhase = () => {
-    const newPhase = currentPhase === "Day" ? "Night" : "Day";
-    setCurrentPhase(newPhase);
-    if (newPhase === "Day") setRound(round + 1);
+  const nextPhase = async () => {
+    // open elimination modal first
+    setShowElimination(true);
 
-    toast({ title: "Phase Changed", description: `Now entering ${newPhase} phase` });
+
+
   };
 
   const handleEndGame = async () => {
@@ -165,6 +185,29 @@ const GameSession = () => {
         return "bg-purple-100 text-purple-800 border-purple-200";
     }
   };
+
+
+
+const confirmEliminationsAndAdvance = async () => {
+  if (!gameId) return;
+  try {
+    if (toEliminate.length) {
+      await terminatePlayers(gameId, toEliminate);
+    }
+    const res = await advancePhase(gameId);
+    const updated = res.data;
+    setCurrentPhase((updated.current_phase || 'day').replace(/^./, c => c.toUpperCase()));
+    setRound(updated.round_number || round);
+    setSelectedTargets([]);
+    setShowElimination(false);
+    setToEliminate([]);
+    toast({ title: "Phase Changed", description: `Now entering ${updated.current_phase} phase` });
+    const logsRes = await getLogsByGame(gameId);
+    setLogs(logsRes.data);
+  } catch (e) {
+    toast({ title: "Error", description: "Failed to advance phase", variant: "destructive" });
+  }
+};
 
   if (loading) {
     return <div className="text-center py-12 text-muted-foreground">Loading game session...</div>;
@@ -310,6 +353,37 @@ const GameSession = () => {
             </Card>
           </div>
         </div>
+
+
+<AlertDialog open={showElimination} onOpenChange={setShowElimination}>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Select eliminated players for this phase</AlertDialogTitle>
+    </AlertDialogHeader>
+    <div className="space-y-2 max-h-64 overflow-auto">
+      {players.map((p) => (
+        <label key={p.id} className="flex items-center gap-2 py-1">
+          <Checkbox
+            checked={toEliminate.includes(p.id)}
+            onCheckedChange={(checked) => {
+              setToEliminate((prev) => {
+                const id = p.id as string;
+                if (checked) return Array.from(new Set([...prev, id]));
+                return prev.filter((x) => x !== id);
+              });
+            }}
+          />
+          <span>{p.name}</span>
+        </label>
+      ))}
+    </div>
+    <AlertDialogFooter className="mt-4">
+      <Button variant="outline" onClick={() => setShowElimination(false)}>Cancel</Button>
+      <Button onClick={confirmEliminationsAndAdvance}>Confirm & Next Phase</Button>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+
       </div>
     </div>
   );

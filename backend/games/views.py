@@ -27,6 +27,37 @@ class GameViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(game).data)
 
 
+    @action(detail=True, methods=['post'])
+    def advance_phase(self, request, pk=None):
+        """Toggle day/night; increment round when back to day; create a GamePhase."""
+        from logs.models import GamePhase
+        game = self.get_object()
+        if game.current_phase == 'day':
+            game.current_phase = 'night'
+        else:
+            game.current_phase = 'day'
+            game.round_number += 1
+        game.save()
+        GamePhase.objects.create(game=game, phase_type=game.current_phase, number=game.round_number)
+        return Response(self.get_serializer(game).data)
+
+    @action(detail=True, methods=['post'])
+    def terminate_players(self, request, pk=None):
+        """Mark provided game_player IDs as eliminated."""
+        from django.utils import timezone
+        game = self.get_object()
+        ids = request.data.get('game_player_ids', [])
+        if not isinstance(ids, list):
+            return Response({'error':'game_player_ids must be a list'}, status=400)
+        updated = 0
+        for gp in GamePlayer.objects.filter(game=game, id__in=ids):
+            if gp.is_alive:
+                gp.is_alive = False
+                gp.eliminated_at = timezone.now()
+                gp.save()
+                updated += 1
+        return Response({'updated': updated})
+
 # === Game Player ViewSet (optional nested endpoint) ===
 class GamePlayerViewSet(viewsets.ModelViewSet):
     queryset = GamePlayer.objects.all()

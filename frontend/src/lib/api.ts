@@ -68,6 +68,9 @@ export const createPlayer = (data: { name: string }) =>
 export const getActionsByGame = (gameId: string) =>
   api.get<LogResponse[]>(`/actions/?game=${gameId}`);
 
+// === Action Types ===
+export const getActionTypes = () => api.get<{id:string;name:string;slug:string;phase:'day'|'night';config:any}[]>('/actions/types/');
+
 
 // =======================
 // Logs API
@@ -108,3 +111,8 @@ export const getDaySpeeches = (phaseId: string) =>
 /** Mark game as complete and set winner */
 export const completeGame = (gameId: string, winner: string) =>
   api.post(`/games/${gameId}/complete/`, { winner });
+
+// === Game commands ===
+export const advancePhase = (gameId: string) => api.post(`/games/${gameId}/advance_phase/`, {});
+export const terminatePlayers = (gameId: string, gamePlayerIds: string[]) =>
+  api.post(`/games/${gameId}/terminate_players/`, { game_player_ids: gamePlayerIds });

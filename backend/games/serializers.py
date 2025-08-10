@@ -15,10 +15,12 @@ class GameSerializer(serializers.ModelSerializer):
     date = serializers.DateTimeField(source='created_at', read_only=True)
     status = serializers.SerializerMethodField()
     players = PlayerSerializer(source='gameplayer_set', many=True, read_only=True)
+    current_phase = serializers.CharField(read_only=True)
+    round_number = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Game
-        fields = ['id', 'date', 'status', 'is_active', 'winner', 'players']  # include winner
+        fields = ['id', 'date', 'status', 'is_active', 'winner', 'current_phase', 'round_number', 'players']  # include winner
 
     def get_status(self, obj):
         return "in-progress" if obj.is_active else "completed"

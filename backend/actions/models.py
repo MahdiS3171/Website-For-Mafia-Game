@@ -13,6 +13,7 @@ class ActionType(models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=100, unique=True)
     phase = models.CharField(max_length=10, choices=[('day', 'Day'), ('night', 'Night')])
+    config = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return self.name

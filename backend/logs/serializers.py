@@ -37,7 +37,7 @@ class LogSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        targets_data = validated_data.pop('log_targets', [])
+        targets_data = validated_data.pop('targets', [])
         log = Log.objects.create(**validated_data)
         for t_data in targets_data:
             LogTarget.objects.create(log=log, **t_data)

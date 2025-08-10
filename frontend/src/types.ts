@@ -121,3 +121,22 @@ export interface DaySpeechResponse {
   content: string;
   started_at: string;
 }
+
+
+// =======================
+// ActionType (from backend)
+// =======================
+export interface ActionType {
+  id: string;
+  name: string;
+  slug: string;
+  phase: "day" | "night";
+  config: {
+    tags?: string[];
+    separatePerTarget?: boolean;
+    multi?: boolean;
+    choose_role?: boolean;
+    composite?: string[];
+    params?: string[];
+  };
+}
