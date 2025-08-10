@@ -3,17 +3,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-import { createPlayer, addPlayerToGame } from "../lib/api";
+import { Link } from "react-router-dom";
+import { createPlayer } from "../lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 const AddPlayer = () => {
   const [name, setName] = useState("");
-  const [gameId, setGameId] = useState("");
-  const [seatNumber, setSeatNumber] = useState<number | null>(null);
+  const [nickname, setNickName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,17 +23,13 @@ const AddPlayer = () => {
 
     try {
       // 1. Create player
-      const newPlayerRes = await createPlayer({ name });
-      const playerId = newPlayerRes.data.id;
-
-      // 2. Add player to game with seat number
-      await addPlayerToGame({
-        game: gameId,
-        player: playerId,
-        seat_number: seatNumber ?? 1, // default 1 if empty
+      const newPlayerRes = await createPlayer({ name, nickname });
+      toast({
+        title: "Player created",
+        description: `Added ${newPlayerRes.data.name}${newPlayerRes.data.nickname ? ` (${newPlayerRes.data.nickname})` : ""}`,
       });
-
-      navigate(`/game/${gameId}`);
+      setName("");
+      setNickName("");
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -71,17 +68,10 @@ const AddPlayer = () => {
                 required
               />
               <Input
-                type="text"
-                placeholder="Game ID"
-                value={gameId}
-                onChange={(e) => setGameId(e.target.value)}
-                required
-              />
-              <Input
-                type="number"
-                placeholder="Seat number"
-                value={seatNumber ?? ""}
-                onChange={(e) => setSeatNumber(Number(e.target.value))}
+                type="string"
+                placeholder="nickname"
+                value={nickname ?? ""}
+                onChange={(e) => setNickName(e.target.value)}
               />
 
               {error && <p className="text-red-500 text-sm">{error}</p>}

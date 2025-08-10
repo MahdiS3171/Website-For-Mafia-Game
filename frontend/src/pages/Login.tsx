@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Lock, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { setAuthToken } from "../lib/api";
 
 interface LoginResponse {
   access: string;
@@ -36,6 +37,8 @@ const Login = () => {
       localStorage.setItem("refreshToken", res.data.refresh);
       localStorage.setItem("adminUsername", res.data.username);
       localStorage.setItem("isAdmin", res.data.isAdmin.toString());
+
+      setAuthToken(res.data.access);
 
       toast({
         title: "Login Successful",

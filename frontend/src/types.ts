@@ -40,10 +40,18 @@ export interface Game {
 }
 
 export interface NestedPlayer {
-  id: string;
+  id: string;                     // game_player id
   name: string;
   role?: string;
   seat_number: number;
+
+  // optional extras from backend (safe for TS even if backend doesn't send them)
+  player_id?: string;
+  nickname?: string | null;
+  role_slug?: string;
+  is_eliminated?: boolean;
+  is_alive?: boolean;
+  eliminated_at?: string | null;
 }
 
 // =======================
@@ -54,6 +62,8 @@ export interface GameResponse {
   date: string;
   status: string;
   is_active: boolean;
+  current_phase: "day" | "night";
+  round_number: number;
   players: NestedPlayer[];
 }
 
@@ -61,6 +71,7 @@ export interface GameResponse {
 export interface PlayerResponse {
   id: string;
   name: string;
+  nickname: string;
 }
 
 export interface GamePlayerResponse {

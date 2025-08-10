@@ -11,6 +11,12 @@ import { ArrowLeft, Users, Clock, ArrowRight } from "lucide-react";
 import { getGameDetails, getLogsByGame, completeGame, createLog, getActionTypes, advancePhase, terminatePlayers } from "../lib/api";
 import { NestedPlayer, LogResponse } from "../types";
 
+function explain(e: any) {
+  return e?.response?.data
+    ? JSON.stringify(e.response.data)
+    : e?.message || String(e);
+}
+
 const GameSession = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const { toast } = useToast();
@@ -27,24 +33,36 @@ const GameSession = () => {
   const [actionTypes, setActionTypes] = useState<any[]>([]);
   const [showElimination, setShowElimination] = useState(false);
   const [toEliminate, setToEliminate] = useState<string[]>([]);
+  const isPlayerEliminated = (p: NestedPlayer) => {
+    if (typeof (p as any).is_eliminated === "boolean") return (p as any).is_eliminated;
+    if (typeof (p as any).is_alive === "boolean") return !(p as any).is_alive;
+    if ((p as any).eliminated_at != null) return true;
+    return false; // default: treat as alive
+  };
 
   // === Fetch players & logs ===
   useEffect(() => {
     const fetchData = async () => {
       try {
         if (!gameId) return;
+
         const [gameRes, logsRes] = await Promise.all([
           getGameDetails(gameId),
           getLogsByGame(gameId),
         ]);
+
         setPlayers(gameRes.data.players);
         setLogs(logsRes.data);
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError("An unknown error occurred");
+
+        // NEW: sync phase/round from backend if present
+        if (gameRes.data.current_phase) {
+          setCurrentPhase(gameRes.data.current_phase === "day" ? "Day" : "Night");
         }
+        if (gameRes.data.round_number) {
+          setRound(gameRes.data.round_number);
+        }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "An unknown error occurred");
       } finally {
         setLoading(false);
       }
@@ -107,31 +125,33 @@ const GameSession = () => {
         for (const targetId of selectedTargets) {
           await createLog({
             game: gameId!,
-            game_player: selectedPlayer,
+            game_player: selectedPlayer!,
             action_type: action.id,
             targets: [{ target: targetId, tag: action.tags[0] }],
             phase: currentPhase.toLowerCase() as "day" | "night",
             round_number: round,
-          , details });
+            details,            // <-- add as a property
+          });
         }
       } else {
-        if (action.tags.length && selectedTargets.length !== action.tags.length) {
-          toast({
-            title: "Invalid targets",
-            description: `This action requires ${action.tags.length} targets`,
-            variant: "destructive",
-          , details });
-          return;
-        }
+          if (action.tags.length && selectedTargets.length !== action.tags.length) {
+            toast({
+              title: "Invalid targets",
+              description: `This action requires ${action.tags.length} targets`,
+              variant: "destructive",
+            });
+            return;
+          }
         const targets = selectedTargets.map((id, idx) => ({ target: id, tag: action.tags[idx] }));
         await createLog({
           game: gameId!,
-          game_player: selectedPlayer,
+          game_player: selectedPlayer!,
           action_type: action.id,
           targets,
           phase: currentPhase.toLowerCase() as "day" | "night",
           round_number: round,
-        , details });
+          details,            // <-- add as a property
+        });
       }
 
       toast({
@@ -188,26 +208,50 @@ const GameSession = () => {
 
 
 
-const confirmEliminationsAndAdvance = async () => {
-  if (!gameId) return;
-  try {
-    if (toEliminate.length) {
-      await terminatePlayers(gameId, toEliminate);
+  const confirmEliminationsAndAdvance = async () => {
+    if (!gameId) return;
+
+    try {
+      // 1) mark selected seats as terminated (if any)
+      if (toEliminate.length > 0) {
+        await terminatePlayers(gameId, toEliminate);   // raw array
+      }
+
+      // 2) advance phase on backend
+      const res = await advancePhase(gameId);
+
+      // 3) re-fetch the game details + logs so UI reflects eliminations
+      const [gameRes, logsRes] = await Promise.all([
+        getGameDetails(gameId),
+        getLogsByGame(gameId),
+      ]);
+
+      // IMPORTANT: players now include is_eliminated from backend
+      setPlayers(gameRes.data.players);
+      setLogs(logsRes.data);
+
+      // 4) sync phase/round indicators
+      setCurrentPhase(res.data.current_phase === "day" ? "Day" : "Night");
+      setRound(res.data.round_number);
+
+      // 5) reset UI state
+      setSelectedTargets([]);
+      setShowElimination(false);
+      setToEliminate([]);
+
+      toast({
+        title: "Phase Changed",
+        description: `Now entering ${res.data.current_phase} phase`,
+      });
+    } catch (e: any) {
+      const msg = e?.response?.data ? JSON.stringify(e.response.data) : e?.message || String(e);
+      toast({
+        title: "Error",
+        description: `Failed to confirm eliminations / advance phase: ${msg}`,
+        variant: "destructive",
+      });
     }
-    const res = await advancePhase(gameId);
-    const updated = res.data;
-    setCurrentPhase((updated.current_phase || 'day').replace(/^./, c => c.toUpperCase()));
-    setRound(updated.round_number || round);
-    setSelectedTargets([]);
-    setShowElimination(false);
-    setToEliminate([]);
-    toast({ title: "Phase Changed", description: `Now entering ${updated.current_phase} phase` });
-    const logsRes = await getLogsByGame(gameId);
-    setLogs(logsRes.data);
-  } catch (e) {
-    toast({ title: "Error", description: "Failed to advance phase", variant: "destructive" });
-  }
-};
+  };
 
   if (loading) {
     return <div className="text-center py-12 text-muted-foreground">Loading game session...</div>;
@@ -270,7 +314,9 @@ const confirmEliminationsAndAdvance = async () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {players.map((player) => (
+                  {players
+                  .filter((p) => !p.is_eliminated)
+                  .map((player) => (
                     <Card
                       key={player.id}
                       className={`cursor-pointer transition-all hover:shadow-md ${
@@ -361,16 +407,19 @@ const confirmEliminationsAndAdvance = async () => {
       <AlertDialogTitle>Select eliminated players for this phase</AlertDialogTitle>
     </AlertDialogHeader>
     <div className="space-y-2 max-h-64 overflow-auto">
-      {players.map((p) => (
+      {players
+      .filter((p) => !p.is_eliminated)
+      .map((p) => (
         <label key={p.id} className="flex items-center gap-2 py-1">
           <Checkbox
-            checked={toEliminate.includes(p.id)}
+            checked={toEliminate.includes(String(p.id))}
             onCheckedChange={(checked) => {
-              setToEliminate((prev) => {
-                const id = p.id as string;
-                if (checked) return Array.from(new Set([...prev, id]));
-                return prev.filter((x) => x !== id);
-              });
+              const id = String(p.id); // p.id must be the *game_player* id
+              setToEliminate((prev) =>
+                checked === true
+                  ? Array.from(new Set([...prev, id]))
+                  : prev.filter((x) => x !== id)
+              );
             }}
           />
           <span>{p.name}</span>

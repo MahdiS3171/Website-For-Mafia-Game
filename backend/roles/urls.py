@@ -7,6 +7,4 @@ router.register(r'', RoleViewSet, basename='role')
 
 app_name = 'roles'
 
-urlpatterns = [
-    path('', include(router.urls)),
-]
+urlpatterns = [ path('', include(router.urls)) ]

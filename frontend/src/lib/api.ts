@@ -15,6 +15,7 @@ import {
 // =======================
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api",
+  withCredentials: false,
 });
 
 // =======================
@@ -29,7 +30,7 @@ export const getGameDetails = (id: string) =>
   api.get<GameResponse>(`/games/${id}/`);
 
 /** Create a new game */
-export const createGame = (data: { is_active?: boolean }) =>
+export const createGame = ( data: { title: string; is_active?: boolean }) =>
   api.post<GameResponse>("/games/", data);
 
 // =======================
@@ -52,11 +53,8 @@ export const addPlayerToGame = (data: {
 // Standalone Players API
 // =======================
 
-/** Get all standalone players (not tied to a specific game) */
-export const getPlayers = () => api.get<PlayerResponse[]>("/players/");
-
 /** Create a standalone player */
-export const createPlayer = (data: { name: string }) =>
+export const createPlayer = (data: { name: string, nickname?: string }) =>
   api.post<PlayerResponse>("/players/", data);
 
 // =======================
@@ -113,6 +111,61 @@ export const completeGame = (gameId: string, winner: string) =>
   api.post(`/games/${gameId}/complete/`, { winner });
 
 // === Game commands ===
-export const advancePhase = (gameId: string) => api.post(`/games/${gameId}/advance_phase/`, {});
-export const terminatePlayers = (gameId: string, gamePlayerIds: string[]) =>
-  api.post(`/games/${gameId}/terminate_players/`, { game_player_ids: gamePlayerIds });
+export const advancePhase = (gameId: string) => api.post<GameResponse>(`/games/${gameId}/advance_phase/`, {});
+
+export const terminatePlayers = (gameId: string, ids: string[]) =>
+  api.post(`/games/${gameId}/terminate_players/`, ids); // raw array, not { ids }
+
+
+export function setAuthToken(token: string | null) {
+  if (token) {
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common["Authorization"];
+  }
+}
+
+const saved = localStorage.getItem("token");
+if (saved) setAuthToken(saved);
+
+
+// optional: auto-refresh access token
+api.interceptors.response.use(
+  (res) => res,
+  async (err) => {
+    if (err?.response?.status === 401) {
+      const refresh = localStorage.getItem("refreshToken");
+      if (!refresh) return Promise.reject(err);
+      try {
+        const r = await api.post<{ access: string }>("/accounts/token/refresh/", { refresh });
+        localStorage.setItem("token", r.data.access);
+        setAuthToken(r.data.access);
+        err.config.headers["Authorization"] = `Bearer ${r.data.access}`;
+        return api.request(err.config);
+      } catch (e) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
+        setAuthToken(null);
+        return Promise.reject(e);
+      }
+    }
+    return Promise.reject(err);
+  }
+);
+
+// Get all roles (expects id, name, slug, is_mafia)
+export const getRoles = () => api.get<RoleDTO[]>("/roles/");
+// Bulk add players to a game in one request
+export const bulkAddPlayersToGame = (
+  gameId: string,
+  rows: { name?: string; nickname?: string; player_id?: string; seat_number: number; role_slug: string }[]
+) => api.post<{ ok: boolean; count: number }>(`/games/${gameId}/bulk_add_players/`, rows);
+
+
+export const getPlayers = (search = "", limit = 50) =>
+  api.get<any>("/players/", {
+    params: search ? { search, page_size: limit } : { page_size: limit },
+});
+
+
+export type RoleDTO = { id: string; name: string; slug: string; is_mafia: boolean };
