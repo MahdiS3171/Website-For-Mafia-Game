@@ -42,11 +42,9 @@ class Log(models.Model):
 
 
 class LogTarget(models.Model):
-    """Through table storing the meaning/tag of each target in a log."""
-
-    log = models.ForeignKey('Log', on_delete=models.CASCADE, related_name='log_targets')
-    target = models.ForeignKey(GamePlayer, on_delete=models.CASCADE)
-    tag = models.CharField(max_length=50, blank=True, null=True)
+    log = models.ForeignKey(Log, related_name='log_targets', on_delete=models.CASCADE)
+    target = models.ForeignKey('games.GamePlayer', on_delete=models.CASCADE)
+    tag = models.CharField(max_length=32, blank=True, null=True)
 
     class Meta:
         unique_together = ('log', 'target', 'tag')

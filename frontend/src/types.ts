@@ -99,22 +99,23 @@ export interface Action {
 // =======================
 // Log Types (for Results page)
 // =======================
-export interface TargetInfo {
+export interface LogTargetDTO {
   target: string;       // GamePlayer ID
-  player_name: string;  // Convenience name of the player
+  player_name?: string;  // Convenience name of the player
   tag?: string;         // Optional tag describing the relation (e.g. "guard")
 }
 
 export interface LogResponse {
   id: string;
-  game: string;           // Game ID
-  game_player: string;    // Player ID (actor)
-  action_type: { id: string; name: string } | string; // Action type info
-  targets: TargetInfo[];  // Detailed target information
+  game: string;
+  game_player: string;
+  player_name?: string;    // populated on GET
+  action_type: string;     // slug
+  targets: LogTargetDTO[];
   phase: "day" | "night";
   round_number: number;
-  details?: any;          // Additional info (k/n, chosen role, ...)
-  created_at: string;     // ISO timestamp
+  details?: any;
+  created_at: string;
 }
 
 
@@ -136,20 +137,32 @@ export interface DaySpeechResponse {
 }
 
 
-// =======================
-// ActionType (from backend)
-// =======================
-export interface ActionType {
+export type ListResult<T> = T[] | { results: T[]; count?: number; next?: string | null; previous?: string | null };
+
+export interface ActionTypeDTO {
   id: string;
   name: string;
   slug: string;
   phase: "day" | "night";
   config: {
     tags?: string[];
-    separatePerTarget?: boolean;
-    multi?: boolean;
+    separate_per_target?: boolean;
+    allow_self?: boolean;
+    params?: ("k" | "n")[];
     choose_role?: boolean;
-    composite?: string[];
-    params?: string[];
   };
+}
+
+export interface ActionResponse {
+  id: string | number;
+  game: string | number;
+  action_type: string;           // slug, e.g., "target"
+  performer: string | number;    // GamePlayer id
+  // depending on your migrations, one or more of these may exist:
+  round_number?: number | null;
+  day_number?: number | null;
+  phase?: "day" | "night" | null;
+  targets: any;                  // often array of { target, tag }, keep as any if JSON
+  details?: any;
+  created_at?: string;
 }

@@ -10,6 +10,9 @@ import {
   DaySpeechResponse,
 } from "../types";
 
+import type { ActionResponse } from "../types";
+import type { ListResult, ActionTypeDTO } from "../types";
+
 // =======================
 // API Setup
 // =======================
@@ -64,10 +67,11 @@ export const createPlayer = (data: { name: string, nickname?: string }) =>
 /** Get all actions for a specific game */
 
 export const getActionsByGame = (gameId: string) =>
-  api.get<LogResponse[]>(`/actions/?game=${gameId}`);
+  api.get<ActionResponse[]>(`/actions/?game=${gameId}`);
 
 // === Action Types ===
-export const getActionTypes = () => api.get<{id:string;name:string;slug:string;phase:'day'|'night';config:any}[]>('/actions/types/');
+export const getActionTypes = () =>
+  api.get<ListResult<ActionTypeDTO>>("/actions/types/");
 
 
 // =======================

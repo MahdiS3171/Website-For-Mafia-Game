@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.postgres.fields import ArrayField
 from games.models import Game, GamePlayer
 
 class ActionType(models.Model):
@@ -19,11 +20,19 @@ class ActionType(models.Model):
         return self.name
 
 class Action(models.Model):
-    game = models.ForeignKey(Game, on_delete=models.CASCADE)
-    action_type = models.ForeignKey(ActionType, on_delete=models.CASCADE)
-    performer = models.ForeignKey(GamePlayer, on_delete=models.CASCADE, related_name='performed_actions')
-    day_number = models.PositiveIntegerField()
-    targets = models.ManyToManyField(GamePlayer, related_name='targeted_by_actions')
+    game = models.ForeignKey('games.Game', on_delete=models.CASCADE, related_name='actions')
+    action_type = models.CharField(max_length=64)  # slug
+    performer = models.ForeignKey('games.GamePlayer', on_delete=models.CASCADE, related_name='performed_actions')
 
-    def __str__(self):
-        return f"{self.action_type.name} توسط {self.performer} در روز {self.day_number}"
+    # RENAME or ADD: keep existing day_number for backward-compat, but add round_number
+    day_number = models.IntegerField(null=True, blank=True)   # legacy
+    round_number = models.IntegerField(null=True, blank=True) # new
+
+    # NEW:
+    phase = models.CharField(max_length=5, choices=(('day','day'), ('night','night')), null=True, blank=True)
+    details = models.JSONField(null=True, blank=True)
+
+    # you already have this:
+    targets = models.ManyToManyField(GamePlayer, related_name='targeted_actions', blank=True)  # e.g. [{ "target": <gp_id>, "tag": "target" }]
+
+    created_at = models.DateTimeField(auto_now_add=True)
