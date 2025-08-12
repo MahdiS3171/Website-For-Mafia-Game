@@ -110,8 +110,8 @@ export const getDaySpeeches = (phaseId: string) =>
 export const completeGame = (gameId: string, winner: string) =>
   api.post(`/games/${gameId}/complete/`, { winner });
 
-// === Game commands ===
-export const advancePhase = (gameId: string) => api.post<GameResponse>(`/games/${gameId}/advance_phase/`, {});
+export const advancePhase = (gameId: string) =>
+  api.post(`/games/${gameId}/advance_phase/`);
 
 export const terminatePlayers = (gameId: string, ids: string[]) =>
   api.post(`/games/${gameId}/terminate_players/`, ids); // raw array, not { ids }

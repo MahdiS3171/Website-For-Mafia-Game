@@ -9,6 +9,7 @@ class Game(models.Model):
     winner = models.CharField(max_length=50, blank=True, null=True)
     current_phase = models.CharField(max_length=10, choices=[('day','Day'),('night','Night')], default='day')
     round_number = models.PositiveIntegerField(default=1)
+    ended_at   = models.DateTimeField(null=True, blank=True)
 
 class GamePlayer(models.Model):
     game = models.ForeignKey(Game, on_delete=models.CASCADE)

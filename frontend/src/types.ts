@@ -59,6 +59,8 @@ export interface NestedPlayer {
 // =======================
 export interface GameResponse {
   id: string;
+  title: string;
+  winner: string;
   date: string;
   status: string;
   is_active: boolean;

@@ -11,12 +11,6 @@ import { ArrowLeft, Users, Clock, ArrowRight } from "lucide-react";
 import { getGameDetails, getLogsByGame, completeGame, createLog, getActionTypes, advancePhase, terminatePlayers } from "../lib/api";
 import { NestedPlayer, LogResponse } from "../types";
 
-function explain(e: any) {
-  return e?.response?.data
-    ? JSON.stringify(e.response.data)
-    : e?.message || String(e);
-}
-
 const GameSession = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const { toast } = useToast();
@@ -33,12 +27,47 @@ const GameSession = () => {
   const [actionTypes, setActionTypes] = useState<any[]>([]);
   const [showElimination, setShowElimination] = useState(false);
   const [toEliminate, setToEliminate] = useState<string[]>([]);
-  const isPlayerEliminated = (p: NestedPlayer) => {
-    if (typeof (p as any).is_eliminated === "boolean") return (p as any).is_eliminated;
-    if (typeof (p as any).is_alive === "boolean") return !(p as any).is_alive;
-    if ((p as any).eliminated_at != null) return true;
-    return false; // default: treat as alive
+  const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
+  const [requiredTargets, setRequiredTargets] = useState<number | null>(null);
+  const [details, setDetails] = useState<any>({});
+
+  type ActionMeta = {
+    id: string;
+    name: string;
+    tags: string[];                  // label(s) for target slots; length = required targets (unless variable by k/n)
+    phase: "day" | "night";
+    separatePerTarget?: boolean;     // loop per target into separate logs
+    allowSelf?: boolean;             // can actor select themself?
+    variableCount?: "k-of-n" | "n";  // actions that prompt for k/n
   };
+
+  const ACTIONS: ActionMeta[] = [
+    // Day actions
+    { id: "fling_target", name: "Fling Target", tags: ["target"], phase: "day", separatePerTarget: true, allowSelf: false },
+    { id: "target",       name: "Target",       tags: ["target"], phase: "day", separatePerTarget: true, allowSelf: false },
+    { id: "siding",       name: "Siding",       tags: ["side"],   phase: "day", separatePerTarget: false, allowSelf: false },
+    { id: "k_of_n_target",name: "K of N Target",tags: [],         phase: "day", separatePerTarget: false, variableCount: "k-of-n", allowSelf: false },
+    { id: "cover",        name: "Cover",        tags: ["target"], phase: "day", separatePerTarget: true, allowSelf: false },
+    { id: "k_of_n_cover", name: "K of N Cover", tags: [],         phase: "day", separatePerTarget: false, variableCount: "k-of-n", allowSelf: false },
+    { id: "dialogue",     name: "Dialogue",     tags: ["target"], phase: "day", separatePerTarget: false, allowSelf: false },
+    { id: "first_vote",   name: "First Vote",   tags: [],         phase: "day", separatePerTarget: false, variableCount: "n", allowSelf: false },
+    { id: "second_vote",  name: "Second Vote",  tags: [],         phase: "day", separatePerTarget: false, variableCount: "n", allowSelf: false },
+    { id: "defense",      name: "Defense",      tags: ["defense"],phase: "day", separatePerTarget: false, allowSelf: false },
+    { id: "claim",        name: "Claim",        tags: [],         phase: "day", separatePerTarget: false, allowSelf: true  }, // choose role, no targets
+    { id: "will",         name: "Will",         tags: [],         phase: "day", separatePerTarget: false, allowSelf: true  }, // composite; we’ll record details
+    { id: "terror",       name: "Terror",       tags: ["target","guard","save"], phase: "day", separatePerTarget: false, allowSelf: false },
+
+    // Night actions
+    { id: "no_faces_choice", name: "No Faces Choice", tags: ["target"], phase: "night", separatePerTarget: false, allowSelf: false },
+    { id: "boozers_shot",    name: "Boozer's Shot",   tags: ["target"], phase: "night", separatePerTarget: false, allowSelf: false },
+    { id: "mafia_kill",      name: "Mafia Kill",      tags: ["target"], phase: "night", separatePerTarget: false, allowSelf: false },
+    { id: "punished",        name: "Punished",        tags: ["target"], phase: "night", separatePerTarget: false, allowSelf: false },
+    { id: "secured",         name: "Secured",         tags: ["target"], phase: "night", separatePerTarget: false, allowSelf: false },
+    { id: "killer_target",   name: "Killer Target",   tags: ["mafia_suggest","city_saviour","city_suggest","killer_kill"], phase: "night", separatePerTarget: false, allowSelf: false },
+    { id: "snipers_shot",    name: "Sniper's Shot",   tags: ["target"], phase: "night", separatePerTarget: false, allowSelf: false },
+    { id: "doctors_save",    name: "Doctor's Save",   tags: ["save1","save2"], phase: "night", separatePerTarget: false, allowSelf: true }, // doctor may self-save depending on rules
+  ];
+
 
   // === Fetch players & logs ===
   useEffect(() => {
@@ -210,46 +239,28 @@ const GameSession = () => {
 
   const confirmEliminationsAndAdvance = async () => {
     if (!gameId) return;
-
     try {
-      // 1) mark selected seats as terminated (if any)
       if (toEliminate.length > 0) {
-        await terminatePlayers(gameId, toEliminate);   // raw array
+        await terminatePlayers(gameId, toEliminate);
       }
+      const phaseRes = await advancePhase(gameId) as { data: { current_phase: string, round_number: number } };
 
-      // 2) advance phase on backend
-      const res = await advancePhase(gameId);
-
-      // 3) re-fetch the game details + logs so UI reflects eliminations
       const [gameRes, logsRes] = await Promise.all([
         getGameDetails(gameId),
         getLogsByGame(gameId),
       ]);
 
-      // IMPORTANT: players now include is_eliminated from backend
       setPlayers(gameRes.data.players);
       setLogs(logsRes.data);
-
-      // 4) sync phase/round indicators
-      setCurrentPhase(res.data.current_phase === "day" ? "Day" : "Night");
-      setRound(res.data.round_number);
-
-      // 5) reset UI state
+      setCurrentPhase(phaseRes.data.current_phase === "day" ? "Day" : "Night");
+      setRound(phaseRes.data.round_number);
       setSelectedTargets([]);
       setShowElimination(false);
       setToEliminate([]);
-
-      toast({
-        title: "Phase Changed",
-        description: `Now entering ${res.data.current_phase} phase`,
-      });
+      toast({ title: "Phase Changed", description: `Now entering ${phaseRes.data.current_phase} phase` });
     } catch (e: any) {
       const msg = e?.response?.data ? JSON.stringify(e.response.data) : e?.message || String(e);
-      toast({
-        title: "Error",
-        description: `Failed to confirm eliminations / advance phase: ${msg}`,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: `Failed to confirm eliminations / advance phase: ${msg}`, variant: "destructive" });
     }
   };
 
@@ -315,7 +326,7 @@ const GameSession = () => {
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {players
-                  .filter((p) => !p.is_eliminated)
+                  .filter((p: any) => !p.is_eliminated)
                   .map((player) => (
                     <Card
                       key={player.id}
@@ -408,13 +419,13 @@ const GameSession = () => {
     </AlertDialogHeader>
     <div className="space-y-2 max-h-64 overflow-auto">
       {players
-      .filter((p) => !p.is_eliminated)
+      .filter((p: any) => !p.is_eliminated)
       .map((p) => (
         <label key={p.id} className="flex items-center gap-2 py-1">
           <Checkbox
             checked={toEliminate.includes(String(p.id))}
             onCheckedChange={(checked) => {
-              const id = String(p.id); // p.id must be the *game_player* id
+              const id = String(p.id);
               setToEliminate((prev) =>
                 checked === true
                   ? Array.from(new Set([...prev, id]))

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Calendar, Users } from "lucide-react";
+import { ArrowLeft, Calendar, Users, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getGames } from "../lib/api";
 import { GameResponse } from "../types";
@@ -65,7 +65,9 @@ const AllGames = () => {
                 <Card key={game.id} className="hover:shadow-md transition-shadow">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
-                      <CardTitle className="text-lg">Game #{game.id}</CardTitle>
+                      <CardTitle className="text-lg">
+                        {game.title || `Game #${game.id}`}
+                      </CardTitle>
                       <Badge className={getStatusColor(game.is_active)}>
                         {game.is_active ? "In Progress" : "Completed"}
                       </Badge>
@@ -81,6 +83,13 @@ const AllGames = () => {
                       <Users className="w-4 h-4 mr-2" />
                       {game.players.length} players
                     </div>
+
+                    {game.winner && (
+                      <div className="flex items-center text-sm text-muted-foreground">
+                        <Trophy className="w-4 h-4 mr-2" />
+                        Winner: {game.winner}
+                      </div>
+                    )}
 
                     <div className="flex gap-2 mt-4">
                       <Button

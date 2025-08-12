@@ -8,6 +8,7 @@ from rest_framework import status, viewsets
 from django.db import transaction
 from players.models import Player
 from roles.models import Role
+from django.utils import timezone
 
 # === Game ViewSet ===
 class GameViewSet(viewsets.ModelViewSet):
@@ -19,42 +20,72 @@ class GameViewSet(viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """Mark a game as completed and set winner side."""
         game = self.get_object()
-        winner = request.data.get("winner")
+        winner = (request.data or {}).get('winner')
 
         if not winner:
             return Response({"error": "Winner field is required."}, status=400)
 
         game.is_active = False
         game.winner = winner  # Make sure `winner` field exists in Game model
-        game.save()
+        game.ended_at = timezone.now()
+        game.save(update_fields=["ended_at", "is_active"])
 
         return Response(self.get_serializer(game).data)
 
-
-    @action(detail=True, methods=['post'])
-    def advance_phase(self, request, pk=None):
-        """Toggle day/night; increment round when back to day; create a GamePhase."""
-        from logs.models import GamePhase
-        game = self.get_object()
-        if game.current_phase == 'day':
-            game.current_phase = 'night'
-        else:
-            game.current_phase = 'day'
-            game.round_number += 1
-        game.save()
-        GamePhase.objects.create(game=game, phase_type=game.current_phase, number=game.round_number)
-        return Response(self.get_serializer(game).data)
 
     @action(detail=True, methods=['post'])
     def terminate_players(self, request, pk=None):
         game = self.get_object()
-        ids = request.data  # ["12", "18"]
-        if not isinstance(ids, list) or not ids:
-            return Response({"error": "Provide a non-empty array"}, status=400)
+
+        data = request.data
+        if not isinstance(data, list):
+            return Response({"error": "Expected a JSON array"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            ids = [int(str(x).strip()) for x in data if str(x).strip()]
+        except (TypeError, ValueError):
+            return Response({"error": "IDs must be integers"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not ids:
+            return Response({"error": "Provide a non-empty array"}, status=status.HTTP_400_BAD_REQUEST)
 
         qs = game.gameplayer_set.filter(id__in=ids)
-        updated = qs.update(isterminated=True)  # <--- update the boolean
-        return Response({"ok": True, "updated": updated})
+        if not qs.exists():
+            return Response({"error": "No matching seats for provided IDs"}, status=status.HTTP_400_BAD_REQUEST)
+
+        updated = 0
+        for gp in qs:
+            changed = False
+            # Support any schema variant you might have:
+            if hasattr(gp, 'isterminated'):
+                if not gp.isterminated:
+                    gp.isterminated = True
+                    changed = True
+            if hasattr(gp, 'is_alive'):
+                if gp.is_alive:
+                    gp.is_alive = False
+                    changed = True
+            if hasattr(gp, 'eliminated_at'):
+                if getattr(gp, 'eliminated_at') is None:
+                    gp.eliminated_at = timezone.now()
+                    changed = True
+            if changed:
+                gp.save()
+                updated += 1
+
+        return Response({"ok": True, "updated": updated}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def advance_phase(self, request, pk=None):
+        game = self.get_object()
+        current = (game.current_phase or "day").lower()
+        if current == "day":
+            game.current_phase = "night"
+        else:
+            game.current_phase = "day"
+            game.round_number = (game.round_number or 0) + 1
+        game.save(update_fields=["current_phase", "round_number"])
+        return Response({"current_phase": game.current_phase, "round_number": game.round_number})
     
     @action(detail=True, methods=['post'])
     def bulk_add_players(self, request, pk=None):
