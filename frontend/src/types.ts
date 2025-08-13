@@ -138,18 +138,24 @@ export interface DaySpeechResponse {
 
 
 export type ListResult<T> = T[] | { results: T[]; count?: number; next?: string | null; previous?: string | null };
+export type TagSpec = { key: string; label: string };
+export type ParamSpec = { type: 'int' | 'string'; required?: boolean; min?: number; max?: number };
 
 export interface ActionTypeDTO {
-  id: string;
+  id: number | string;
   name: string;
   slug: string;
-  phase: "day" | "night";
+  phase: 'day' | 'night';
   config: {
-    tags?: string[];
-    separate_per_target?: boolean;
+    tags?: (string | TagSpec)[];         // backend accepts both; we’ll normalize to TagSpec[]
+    item_label?: string;
+    params?: Record<string, ParamSpec>;
+    details_schema?: Record<string, any>;
+    requires_targets?: boolean;
     allow_self?: boolean;
-    params?: ("k" | "n")[];
-    choose_role?: boolean;
+    separate_per_target?: boolean;
+    separatePerTarget?: boolean;         // legacy
+    derive_n_from_targets?: boolean;
   };
 }
 

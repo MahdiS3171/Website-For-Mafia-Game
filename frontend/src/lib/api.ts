@@ -13,6 +13,11 @@ import {
 import type { ActionResponse } from "../types";
 import type { ListResult, ActionTypeDTO } from "../types";
 
+type ActionTypesWire =
+  | ActionTypeDTO[]
+  | { results: ActionTypeDTO[] }
+  | { data: ActionTypeDTO[] };
+
 // =======================
 // API Setup
 // =======================
@@ -70,8 +75,15 @@ export const getActionsByGame = (gameId: string) =>
   api.get<ActionResponse[]>(`/actions/?game=${gameId}`);
 
 // === Action Types ===
-export const getActionTypes = () =>
-  api.get<ListResult<ActionTypeDTO>>("/actions/types/");
+export async function getActionTypes(): Promise<ActionTypeDTO[]> {
+  const res = await api.get<ActionTypesWire>("/actions/types/");
+  const d = res.data;
+
+  if (Array.isArray(d)) return d;
+  if (d && "results" in d && Array.isArray(d.results)) return d.results;
+  if (d && "data" in d && Array.isArray(d.data)) return d.data;
+  return [];
+}
 
 
 // =======================

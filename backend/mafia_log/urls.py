@@ -21,7 +21,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/accounts/', include('accounts.urls', namespace='accounts')),
     path('api/', include('games.urls')),
-    path('api/actions/', include('actions.urls')),
+    path('api/actions/', include('actions.urls', namespace='actions')),
     path('api/logs/', include('logs.urls')),
     path('api/players/', include('players.urls')),
     path('api/roles/', include('roles.urls', namespace='roles')),
