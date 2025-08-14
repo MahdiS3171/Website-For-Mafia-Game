@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAdminUser , AllowAny
+from rest_framework.permissions import IsAuthenticated , AllowAny
 from .models import Game, GamePlayer, GameRole
 from .serializers import GameSerializer, GamePlayerSerializer, GameRoleSerializer
 from rest_framework import status, viewsets
@@ -9,10 +9,11 @@ from django.db import transaction
 from players.models import Player
 from roles.models import Role
 from django.utils import timezone
+from logs.models import DayTurn
 
 # === Game ViewSet ===
 class GameViewSet(viewsets.ModelViewSet):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     queryset = Game.objects.all().order_by('-created_at')
     serializer_class = GameSerializer
 
@@ -28,7 +29,7 @@ class GameViewSet(viewsets.ModelViewSet):
         game.is_active = False
         game.winner = winner  # Make sure `winner` field exists in Game model
         game.ended_at = timezone.now()
-        game.save(update_fields=["ended_at", "is_active"])
+        game.save(update_fields=["ended_at", "is_active", "winner"])
 
         return Response(self.get_serializer(game).data)
 
@@ -79,6 +80,7 @@ class GameViewSet(viewsets.ModelViewSet):
     def advance_phase(self, request, pk=None):
         game = self.get_object()
         current = (game.current_phase or "day").lower()
+        DayTurn.objects.filter(game=game, closed_at__isnull=True).update(closed_at=timezone.now())
         if current == "day":
             game.current_phase = "night"
         else:

@@ -172,3 +172,12 @@ export interface ActionResponse {
   details?: any;
   created_at?: string;
 }
+
+export type PlayerWithStats = {
+  id: number | string;
+  name: string;
+  nickname?: string | null;
+  games_played: number;
+  wins: number;
+  win_rate: number;
+};

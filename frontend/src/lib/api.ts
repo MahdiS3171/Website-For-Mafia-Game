@@ -8,6 +8,7 @@ import {
   LogResponse,
   GamePhaseResponse,
   DaySpeechResponse,
+  PlayerWithStats,
 } from "../types";
 
 import type { ActionResponse } from "../types";
@@ -103,6 +104,7 @@ export const createLog = (data: {
   phase: "day" | "night";
   round_number: number;
   details?: any;
+  day_turn?: string | number;
 }) => api.post<LogResponse>("/logs/", data);
 
 // =======================
@@ -185,3 +187,40 @@ export const getPlayers = (search = "", limit = 50) =>
 
 
 export type RoleDTO = { id: string; name: string; slug: string; is_mafia: boolean };
+
+
+export type DayTurnDTO = {
+  id: string | number;
+  game: string | number;
+  round_number: number;
+  index: number;
+  actor: string | number;
+  actor_name?: string;
+  opened_at: string;
+  closed_at: string | null;
+};
+
+export const startTurn = (game: string | number, actor: string | number) =>
+  api.post<DayTurnDTO>("/logs/turns/start/", { game, actor });
+
+export const endTurn = (turnId: string | number) =>
+  api.post<DayTurnDTO>(`/logs/turns/${turnId}/end/`, {});
+
+export const getCurrentTurn = (game: string | number) =>
+  api.get<DayTurnDTO | void>(`/logs/turns/current/?game=${game}`);
+
+
+// List with stats
+export const listPlayersWithStats = () =>
+  api.get<PlayerWithStats[]>("/players/?with_stats=1");
+
+// Update player (name / nickname)
+export const updatePlayer = (id: string | number, payload: { name?: string; nickname?: string | null }) =>
+  api.patch(`/players/${id}/`, payload);
+
+
+
+export const deleteLog = (id: string | number) =>
+  api.delete(`/logs/${id}/`);
+export const deleteGame = (id: string | number) =>
+  api.delete(`/games/${id}/`);

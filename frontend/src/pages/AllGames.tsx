@@ -6,11 +6,17 @@ import { ArrowLeft, Calendar, Users, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getGames } from "../lib/api";
 import { GameResponse } from "../types";
+import { Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter } from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { deleteGame as apiDeleteGame } from "@/lib/api";
 
 const AllGames = () => {
   const [games, setGames] = useState<GameResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | number | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -27,10 +33,19 @@ const AllGames = () => {
     fetchGames();
   }, []);
 
-  const getStatusColor = (isActive: boolean) => {
-    return isActive
-      ? "bg-blue-100 text-blue-800 border-blue-200"
-      : "bg-green-100 text-green-800 border-green-200";
+  const confirmDeleteGame = async () => {
+    if (!deleteId) return;
+    try {
+      await apiDeleteGame(deleteId);
+      // Remove from UI immediately
+      setGames(prev => prev.filter(g => String(g.id) !== String(deleteId)));
+      toast({ title: "Game deleted" });
+    } catch (e: any) {
+      const msg = e?.response?.data ? JSON.stringify(e.response.data) : e?.message || "Failed to delete game";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setDeleteId(null);
+    }
   };
 
   if (loading) {
@@ -62,17 +77,29 @@ const AllGames = () => {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {games.map((game) => (
-                <Card key={game.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <CardTitle className="text-lg">
-                        {game.title || `Game #${game.id}`}
-                      </CardTitle>
-                      <Badge className={getStatusColor(game.is_active)}>
-                        {game.is_active ? "In Progress" : "Completed"}
-                      </Badge>
+                <Card key={game.id} className={`relative hover:shadow-md transition-shadow border-l-4 ${game.is_active ? "border-l-emerald-500" : "border-l-slate-400"}`}>
+                  {/* Delete button pinned to this card */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-4 right-3 z-10 text-red-500 hover:text-red-600"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteId(game.id); }}
+                    title="Delete game"
+                    aria-label="Delete game"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+
+                  <CardHeader className="pb-3 pr-10">
+                    <CardTitle className="text-lg">
+                      {game.title || `Game #${game.id}`}
+                    </CardTitle>
+                    <div className="mt-2 flex items-center gap-2 text-sm">
+                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${game.is_active ? "bg-green-600" : "bg-blue-600"}`} />
+                      <span className="text-muted-foreground">{game.is_active ? "In Progress" : "Completed"}</span>
                     </div>
                   </CardHeader>
+
                   <CardContent className="space-y-3">
                     <div className="flex items-center text-sm text-muted-foreground">
                       <Calendar className="w-4 h-4 mr-2" />
@@ -116,6 +143,21 @@ const AllGames = () => {
             )}
           </CardContent>
         </Card>
+
+        <AlertDialog open={deleteId != null} onOpenChange={(o) => !o && setDeleteId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this game?</AlertDialogTitle>
+            </AlertDialogHeader>
+            <div className="text-sm text-muted-foreground">
+              This will permanently remove the game and all of its logs, turns, and related records.
+            </div>
+            <AlertDialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={confirmDeleteGame}>Delete</Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

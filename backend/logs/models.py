@@ -1,6 +1,7 @@
 from django.db import models
 from games.models import Game, GamePlayer
 from roles.models import Role
+from django.utils import timezone
 
 # class Log(models.Model):
 #     game = models.ForeignKey(Game, on_delete=models.CASCADE)
@@ -14,40 +15,50 @@ from roles.models import Role
 #         return f"{self.phase.title()} {self.round_number} - {self.game_player.player.name}"
     
 class Log(models.Model):
-    """Generic log entry for any in-game action.
-
-    The previous implementation only kept a list of target ``GamePlayer``
-    instances which made it impossible to distinguish between actions that
-    required multiple targets with different meanings (e.g. the *terror*
-    action which has a ``target``, ``guard`` and ``save`` player).  To make the
-    logging flexible enough for all of the actions described in the user
-    requirements we introduce a small through model ``LogTarget`` which allows
-    us to store an optional ``tag`` for every target.  In addition a ``details``
-    JSON field is added so actions like "k of n" or "claim" can keep arbitrary
-    extra information.
     """
-
-    game = models.ForeignKey(Game, on_delete=models.CASCADE)
-    game_player = models.ForeignKey(GamePlayer, on_delete=models.CASCADE)
+    Generic log entry for any in-game action.
+    Uses a through model (LogTarget) to support tagged targets (e.g., 'guard', 'save').
+    """
+    game = models.ForeignKey('games.Game', on_delete=models.CASCADE)
+    game_player = models.ForeignKey('games.GamePlayer', on_delete=models.CASCADE)
     action_type = models.ForeignKey('actions.ActionType', on_delete=models.CASCADE)
+
     targets = models.ManyToManyField(
-        GamePlayer,
-        through='LogTarget',
+        'games.GamePlayer',
+        through='logs.LogTarget',          # string path avoids import-order issues
         related_name='logs_targeted'
     )
-    phase = models.CharField(max_length=10, choices=[('day', 'روز'), ('night', 'شب')])
+
+    PHASE_CHOICES = [
+        ('day', 'Day'),
+        ('night', 'Night'),
+    ]
+    phase = models.CharField(max_length=10, choices=PHASE_CHOICES)
     round_number = models.PositiveIntegerField()
     details = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Optional link to a DayTurn when logging during a player's turn
+    day_turn = models.ForeignKey('logs.DayTurn', null=True, blank=True, on_delete=models.SET_NULL)
+
+    def __str__(self):
+        return (f"Log g{self.game_id} p{self.game_player_id} "
+                f"a{self.action_type_id} r{self.round_number} {self.phase}")
+
 
 class LogTarget(models.Model):
-    log = models.ForeignKey(Log, related_name='log_targets', on_delete=models.CASCADE)
+    """
+    Target row with an optional tag to distinguish roles (e.g., 'target', 'guard', 'save').
+    """
+    log = models.ForeignKey('logs.Log', related_name='log_targets', on_delete=models.CASCADE)
     target = models.ForeignKey('games.GamePlayer', on_delete=models.CASCADE)
     tag = models.CharField(max_length=32, blank=True, null=True)
 
     class Meta:
         unique_together = ('log', 'target', 'tag')
+
+    def __str__(self):
+        return f"LogTarget {self.log_id} -> {self.target_id} [{self.tag}]"
 
 class GamePhase(models.Model):
     game = models.ForeignKey(Game, on_delete=models.CASCADE)
@@ -127,3 +138,29 @@ class NightPhase(GamePhase):
         proxy = True
         verbose_name = 'Night Phase'
         verbose_name_plural = 'Night Phases'
+        
+        
+class DayTurn(models.Model):
+    """
+    Global turn index per day (round_number). Only one open turn per game at a time.
+    Example: Day 3, Turn #16, actor = seat X.
+    """
+    game = models.ForeignKey('games.Game', on_delete=models.CASCADE)
+    round_number = models.PositiveIntegerField()          # the Day number
+    index = models.PositiveIntegerField()                 # Turn number within that day (1..N)
+    actor = models.ForeignKey('games.GamePlayer', on_delete=models.CASCADE)
+    opened_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = (('game', 'round_number', 'index'),)
+        ordering = ['game_id', 'round_number', 'index']
+
+    def close(self):
+        if not self.closed_at:
+            self.closed_at = timezone.now()
+            self.save(update_fields=['closed_at'])
+
+    def __str__(self):
+        return f"Game {self.game_id} D{self.round_number} T#{self.index} (actor {self.actor_id})"
+

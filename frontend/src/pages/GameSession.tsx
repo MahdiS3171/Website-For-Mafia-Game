@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Users, Clock, ArrowRight } from "lucide-react";
-
+import { startTurn, endTurn, getCurrentTurn } from "../lib/api";
 import DynamicActionDialog from "@/components/DynamicActionDialog";
 import type { ActionTypeDTO, GamePlayerResponse } from "../types";
+import { Trash2 } from "lucide-react";
+import { deleteLog as apiDeleteLog } from "../lib/api";
 
 import {
   getGameDetails,
@@ -24,32 +26,36 @@ import { NestedPlayer, LogResponse } from "../types";
 
 const GameSession = () => {
   const { gameId } = useParams<{ gameId: string }>();
+  const navigate = useNavigate();
   const { toast } = useToast();
-
   const [players, setPlayers] = useState<NestedPlayer[]>([]);
   const [logs, setLogs] = useState<LogResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  const [openTurn, setOpenTurn] = useState<{
+    id: string | number;
+    index: number;
+    actorId: string | number;
+    actorName?: string;
+  } | null>(null);
   // selection state
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
-
   // phase/round
   const [currentPhase, setCurrentPhase] = useState<"Day" | "Night">("Day");
   const [round, setRound] = useState(1);
-
   // elimination modal
   const [showElimination, setShowElimination] = useState(false);
   const [toEliminate, setToEliminate] = useState<string[]>([]);
-
   // New: data-driven actions + dialog
   const [actionTypes, setActionTypes] = useState<ActionTypeDTO[]>([]);
   const [chosenAction, setChosenAction] = useState<ActionTypeDTO | null>(null);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
-
   // --- Will queue flow (show a Will dialog for each eliminated player)
   const [willQueue, setWillQueue] = useState<GamePlayerResponse[]>([]);
   const [processingWills, setProcessingWills] = useState(false);
+  const [deleteLogId, setDeleteLogId] = useState<string | number | null>(null);
+  const [showEndDialog, setShowEndDialog] = useState(false);
+  const [winnerChoice, setWinnerChoice] = useState<"Mafia" | "Citizen">("Mafia");
 
   // ActionType reference for 'will'
   const willAction = useMemo(
@@ -122,7 +128,22 @@ const GameSession = () => {
   useEffect(() => {
     setChosenAction(null);
     setActionDialogOpen(false);
+    setOpenTurn(null);
   }, [currentPhase]);
+
+  useEffect(() => {
+    (async () => {
+      if (!gameId) return;
+      try {
+        const res = await getCurrentTurn(gameId);
+        const dt = (res as any)?.data;
+        if (dt && dt.id) {
+          setOpenTurn({ id: dt.id, index: dt.index, actorId: dt.actor, actorName: dt.actor_name });
+          setSelectedPlayer(String(dt.actor));
+        }
+      } catch {}
+    })();
+  }, [gameId]);
 
   // Helpers
   const currentPhaseLower = useMemo(() => currentPhase.toLowerCase() as "day" | "night", [currentPhase]);
@@ -162,8 +183,26 @@ const GameSession = () => {
     [players]
   );
 
+  const recentLogs = useMemo(() => {
+    // Show only logs for the current round/day, newest first; take last 12
+    const roundNow = round;
+    const list = [...logs]
+      .filter(l => Number(l.round_number) === Number(roundNow) && String(l.phase).toLowerCase() === currentPhaseLower)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return list.slice(0, 12);
+  }, [logs, round, currentPhaseLower]);
+
+
   // Player click: pick the actor
   const handlePlayerClick = (playerId: string) => {
+    if (openTurn && String(openTurn.actorId) !== String(playerId)) {
+      toast({
+        title: "Turn in progress",
+        description: "End the current turn before switching actor.",
+        variant: "destructive",
+      });
+      return;
+    }
     // If clicking the same player, toggle off
     if (selectedPlayer && String(selectedPlayer) === String(playerId)) {
       setSelectedPlayer(null);
@@ -234,6 +273,7 @@ const GameSession = () => {
           phase: currentPhaseLower,
           round_number: round,
           details,
+          ...(openTurn ? { day_turn: openTurn.id } : {}), 
         });
       }
 
@@ -326,18 +366,199 @@ const GameSession = () => {
   };
 
 
-  const handleEndGame = async () => {
-    const winner = prompt("Enter winner side (e.g., Mafia, Citizens):");
-    if (!winner) return;
-
+  const handleConfirmEndGame = async () => {
+    if (!gameId) return;
     try {
-      await completeGame(gameId!, winner);
-      toast({ title: "Game Completed", description: `Winner: ${winner}` });
-    } catch (err: unknown) {
-      const description = err instanceof Error ? err.message : "An unknown error occurred";
+      await completeGame(gameId, winnerChoice); // sends exactly "Mafia" or "Citizen"
+      toast({ title: "Game Completed", description: `Winner: ${winnerChoice}` });
+      setShowEndDialog(false);
+      const RESULTS_PATH = `/results/${gameId}`;
+      navigate(RESULTS_PATH);
+    } catch (err: any) {
+      const description = err?.response?.data ? JSON.stringify(err.response.data) : err?.message || "Failed to end game";
       toast({ title: "Error", description, variant: "destructive" });
     }
   };
+
+  // start/ end handlers
+  const handleStartTurn = async () => {
+    if (!gameId || !selectedPlayer || currentPhaseLower !== "day") {
+      toast({ title: "Turns are Day-only", description: "Pick an actor during Day to start.", variant: "destructive" });
+      return;
+    }
+    try {
+      const res = await startTurn(gameId, selectedPlayer);
+      const dt = res.data;
+      setOpenTurn({ id: dt.id, index: dt.index, actorId: dt.actor, actorName: dt.actor_name });
+      // lock actor
+      setSelectedPlayer(String(dt.actor));
+      toast({ title: "Turn started", description: `Day ${round}, Turn #${dt.index} — ${dt.actor_name ?? "player"}` });
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.message || "Failed to start turn";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
+  };
+
+  const handleEndTurn = async () => {
+    if (!openTurn) return;
+    try {
+      await endTurn(openTurn.id);
+      toast({ title: "Turn ended", description: `Turn #${openTurn.index} closed.` });
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.message || "Failed to end turn";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setOpenTurn(null);
+      setSelectedPlayer(null);
+    }
+  };
+
+  // Build a tag label map for a given action slug using actionTypes config
+  const getTagLabelMap = (slug: string) => {
+    const at = actionTypes.find(a => a.slug === slug);
+    const tags = (at?.config as any)?.tags ?? [];
+    const map: Record<string, string> = {};
+    if (Array.isArray(tags)) {
+      for (const t of tags) {
+        if (typeof t === "string") {
+          const label = t.charAt(0).toUpperCase() + t.slice(1);
+          map[t] = label;
+        } else if (t && typeof t === "object" && t.key) {
+          map[t.key] = t.label ?? (t.key.charAt(0).toUpperCase() + t.key.slice(1));
+        }
+      }
+    }
+    return map;
+  };
+
+  const nameOf = (gpId?: string | number) =>
+    gpId == null ? "" : (players.find(p => String(p.id) === String(gpId))?.name ?? `#${gpId}`);
+
+  const seatOf = (gpId?: string | number) => {
+    const p = players.find(x => String(x.id) === String(gpId));
+    return p?.seat_number ?? undefined;
+  };
+
+  const actionName = (slug: string) =>
+    actionTypes.find(a => a.slug === slug)?.name ?? slug.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+  // Format a list of player ids as "S{seat}. Name"
+  const fmtList = (ids: (string|number)[]) =>
+    ids.map(id => {
+      const seat = seatOf(id);
+      const nm = nameOf(id);
+      return seat != null ? `S${seat}. ${nm}` : nm;
+    }).join(", ");
+
+  // Turn label: Day X — Turn #Y (if present)
+  const turnLabel = (log: LogResponse) =>
+    typeof (log as any).turn_index === "number"
+      ? `Day ${log.round_number} — Turn #${(log as any).turn_index}`
+      : `Day ${log.round_number}${log.phase ? ` (${log.phase})` : ""}`;
+
+
+
+  const renderDetails = (log: LogResponse) => {
+    const slug = log.action_type as string;
+    const tagLabel = getTagLabelMap(slug);
+    const tgt = (log as any).targets as Array<{ target: string|number; tag?: string; player_name?: string }> | undefined;
+    const d = (log as any).details || {};
+
+    // 1) Multi-target actions with explicit tags (terror, killer_target, etc.)
+    if (Array.isArray(tgt) && tgt.length) {
+      return (
+        <div className="flex flex-wrap gap-1">
+          {tgt.map((t, idx) => {
+            const lbl = t.tag ? (tagLabel[t.tag] ?? (t.tag.charAt(0).toUpperCase() + t.tag.slice(1))) : "Target";
+            const seat = seatOf(t.target);
+            const nm = nameOf(t.target);
+            return (
+              <Badge key={idx} variant="outline">
+                {lbl}: {seat != null ? `S${seat}. ` : ""}{nm}
+              </Badge>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // 2) Claim
+    if (slug === "claim" && d?.role_slug) {
+      return <span>Claims <Badge>{String(d.role_slug)}</Badge></span>;
+    }
+
+    // 3) Will (arrays; empty allowed)
+    if (slug === "will") {
+      const targets = Array.isArray(d?.targets) ? d.targets : [];
+      const covers = Array.isArray(d?.covers) ? d.covers : [];
+      const role = d?.claim_role ? String(d.claim_role) : null;
+      return (
+        <div className="space-y-1">
+          <div><span className="font-medium">Targets:</span> {targets.length ? fmtList(targets) : <em>—</em>}</div>
+          <div><span className="font-medium">Covers:</span> {covers.length ? fmtList(covers) : <em>—</em>}</div>
+          <div><span className="font-medium">Role:</span> {role ? role : <em>—</em>}</div>
+        </div>
+      );
+    }
+
+    // 4) Defense (coverer + targets + covered; optional)
+    if (slug === "defense") {
+      const coverer = d?.defense_coverer;
+      const defTargets = Array.isArray(d?.defense_targets) ? d.defense_targets : [];
+      const defCovered = Array.isArray(d?.defense_covered) ? d.defense_covered : [];
+      return (
+        <div className="space-y-1">
+          <div><span className="font-medium">Covering player:</span> {coverer ? fmtList([coverer]) : <em>—</em>}</div>
+          <div><span className="font-medium">Def. targets:</span> {defTargets.length ? fmtList(defTargets) : <em>—</em>}</div>
+          <div><span className="font-medium">Covered:</span> {defCovered.length ? fmtList(defCovered) : <em>—</em>}</div>
+        </div>
+      );
+    }
+
+    // 5) Votes
+    if (slug === "first_vote" || slug === "second_vote") {
+      const voters = Array.isArray(d?.voters) ? d.voters : (Array.isArray(d?.targets) ? d.targets : []);
+      const n = typeof d?.n === "number" ? d.n : (voters?.length ?? 0);
+      return (
+        <div className="space-x-2">
+          <Badge variant="outline">n = {n}</Badge>
+          <span>Voters: {Array.isArray(voters) && voters.length ? fmtList(voters) : <em>—</em>}</span>
+        </div>
+      );
+    }
+
+    // 6) k-of-n
+    if (slug === "k_of_n_target" || slug === "k_of_n_cover") {
+      const k = d?.k, n = d?.n;
+      const chosen = Array.isArray(d?.targets) ? d.targets : [];
+      return (
+        <div className="space-x-2">
+          <Badge variant="outline">k = {k ?? "?"}</Badge>
+          <Badge variant="outline">n = {n ?? (Array.isArray(chosen) ? chosen.length : "?")}</Badge>
+          <span>Chosen: {Array.isArray(chosen) && chosen.length ? fmtList(chosen) : <em>—</em>}</span>
+        </div>
+      );
+    }
+
+    return <em>No details</em>;
+  };
+
+  const confirmDeleteLog = async () => {
+    if (!deleteLogId) return;
+    try {
+      await apiDeleteLog(deleteLogId);
+      setLogs(prev => prev.filter(l => String(l.id) !== String(deleteLogId)));
+      toast({ title: "Log deleted" });
+    } catch (e: any) {
+      const msg = e?.response?.data ? JSON.stringify(e.response.data) : e?.message || "Failed to delete log";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setDeleteLogId(null);
+    }
+  };
+
+
+
 
   const getRoleColor = (role?: string) => {
     switch (role?.toLowerCase()) {
@@ -375,7 +596,7 @@ const GameSession = () => {
             Back to Games
           </Link>
 
-          <Button variant="destructive" onClick={handleEndGame}>
+          <Button variant="destructive" onClick={() => setShowEndDialog(true)}>
             End Game
           </Button>
         </div>
@@ -401,6 +622,11 @@ const GameSession = () => {
                 <Badge variant="outline" className="text-lg px-4 py-2">
                   {currentPhase} Phase
                 </Badge>
+                {currentPhase === "Day" && openTurn && (
+                  <Badge variant="outline" className="px-3 py-1">
+                    Day {round} — Turn #{openTurn.index} (Actor: {players.find(p => String(p.id) === String(openTurn.actorId))?.name ?? openTurn.actorName ?? "Player"})
+                  </Badge> 
+                )}
                 <Button onClick={nextPhase} className="flex items-center gap-2">
                   Next Phase <ArrowRight className="w-4 h-4" />
                 </Button>
@@ -410,6 +636,62 @@ const GameSession = () => {
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Recent Actions Grid */}
+          <Card className="lg:col-span-3">
+            <CardHeader className="pb-2">
+              <CardTitle>Recent actions</CardTitle>
+              <div className="text-xs text-muted-foreground">
+                Showing latest for {currentPhase} / Day {round}. (We can add filters later.)
+              </div>
+            </CardHeader>
+            <CardContent>
+              {recentLogs.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No actions logged yet.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left">
+                      <tr className="border-b">
+                        <th className="py-2 pr-2 w-10 align-middle" /> {/* trash */}
+                        <th className="py-2 pr-4 align-middle">Actor</th>
+                        <th className="py-2 pr-4 align-middle">Turn</th>
+                        <th className="py-2 pr-4 align-middle">Action</th>
+                        <th className="py-2 align-middle">Details / Targets</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentLogs.map((log) => {
+                        const actorSeat = seatOf(log.game_player);
+                        const actorName = (log as any).player_name ?? nameOf(log.game_player);
+                        return (
+                          <tr key={log.id} className="border-b last:border-b-0 align-top">
+                            <td className="py-2 pr-2 align-middle">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-red-500 hover:text-red-600"
+                                onClick={() => setDeleteLogId(log.id)}
+                                aria-label="Delete log"
+                                title="Delete log"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </td>
+                            <td className="py-2 pr-4 whitespace-nowrap align-middle">
+                              {actorSeat != null ? `S${actorSeat}. ` : ""}{actorName}
+                            </td>
+                            <td className="py-2 pr-4 whitespace-nowrap align-middle">{turnLabel(log)}</td>
+                            <td className="py-2 pr-4 whitespace-nowrap align-middle">{actionName(log.action_type)}</td>
+                            <td className="py-2 align-middle">{renderDetails(log)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
           {/* Players Grid */}
           <div className="lg:col-span-2">
             <Card>
@@ -457,7 +739,14 @@ const GameSession = () => {
                         {players.find((p) => String(p.id) === String(selectedPlayer))?.name}
                       </p>
                     </div>
-
+                    <div className="flex gap-2">
+                      {currentPhase === "Day" && !openTurn && selectedPlayer && (
+                        <Button onClick={handleStartTurn}>Start Turn</Button>
+                      )}
+                      {currentPhase === "Day" && openTurn && (
+                        <Button variant="secondary" onClick={handleEndTurn}>End Turn</Button>
+                      )}
+                    </div>
                     <div className="space-y-2">
                       <h4 className="font-medium">Available Actions:</h4>
                       {actionTypes.length === 0 && (
@@ -520,6 +809,68 @@ const GameSession = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <AlertDialog open={deleteLogId != null} onOpenChange={(o) => !o && setDeleteLogId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this action?</AlertDialogTitle>
+            </AlertDialogHeader>
+            <div className="text-sm text-muted-foreground">
+              This will permanently remove the log from the game history.
+            </div>
+            <AlertDialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setDeleteLogId(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={confirmDeleteLog}>Delete</Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={showEndDialog} onOpenChange={setShowEndDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>End game — choose the winning side</AlertDialogTitle>
+            </AlertDialogHeader>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="flex items-center gap-2 border rounded-md p-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="winner"
+                    value="Mafia"
+                    checked={winnerChoice === "Mafia"}
+                    onChange={() => setWinnerChoice("Mafia")}
+                    className="accent-current"
+                  />
+                  <span>Mafia</span>
+                </label>
+                <label className="flex items-center gap-2 border rounded-md p-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="winner"
+                    value="Citizen"
+                    checked={winnerChoice === "Citizen"}
+                    onChange={() => setWinnerChoice("Citizen")}
+                    className="accent-current"
+                  />
+                  <span>Citizen</span>
+                </label>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                This action will finalize the game and move it to the results list.
+              </div>
+            </div>
+
+            <AlertDialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setShowEndDialog(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleConfirmEndGame}>
+                End Game
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
 
         {/* Dynamic action dialog */}
         {chosenAction && selectedActorObj && (

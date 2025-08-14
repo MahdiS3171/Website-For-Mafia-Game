@@ -57,6 +57,7 @@ class GameSerializer(serializers.ModelSerializer):
     players = GamePlayerSerializer(source='gameplayer_set', many=True, read_only=True)
     is_active = serializers.SerializerMethodField()
     date = serializers.SerializerMethodField()
+    winner = serializers.SerializerMethodField()  # <- ADD: computed winner
 
     class Meta:
         model = Game
@@ -70,6 +71,35 @@ class GameSerializer(serializers.ModelSerializer):
 
     def get_date(self, obj):
         return obj.created_at.date()
+
+    def get_winner(self, obj):
+        """
+        Only expose winner for completed games.
+        Read from multiple possible locations for robustness.
+        """
+        # Gate on completion
+        if obj.ended_at is None:
+            return None
+
+        # Try common places
+        side = (
+            getattr(obj, "winner", None) or
+            getattr(obj, "winner_side", None) or
+            getattr(obj, "winning_side", None)
+        )
+
+        # Fallback to a related result object, if you have one
+        # (adjust attribute name if yours is different)
+        if not side:
+            result = (
+                getattr(obj, "result", None) or
+                getattr(obj, "game_result", None) or
+                getattr(obj, "gameresult", None)
+            )
+            if result:
+                side = getattr(result, "winner", None) or getattr(result, "winner_side", None)
+
+        return side or None
 
 
 class GameRoleSerializer(serializers.ModelSerializer):

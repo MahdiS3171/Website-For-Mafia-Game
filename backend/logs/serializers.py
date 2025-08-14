@@ -1,6 +1,16 @@
 from rest_framework import serializers
-from .models import Log, LogTarget, GamePhase, DaySpeech
+from .models import Log, LogTarget, GamePhase, DaySpeech, DayTurn
 from actions.models import ActionType
+from rest_framework import serializers as drf
+
+
+class DayTurnSerializer(drf.ModelSerializer):
+    actor_name = drf.CharField(source='actor.player.name', read_only=True)
+
+    class Meta:
+        model = DayTurn
+        fields = ['id', 'game', 'round_number', 'index', 'actor', 'actor_name', 'opened_at', 'closed_at']
+        read_only_fields = ['index', 'opened_at', 'closed_at']
 
 
 # === LogTarget Serializer ===
@@ -18,6 +28,9 @@ class LogSerializer(serializers.ModelSerializer):
     # NOTE: field name "targets" maps to model field "log_targets"
     targets = LogTargetSerializer(many=True, source='log_targets', required=False)
     player_name = serializers.CharField(source='game_player.player.name', read_only=True)
+    
+    turn_index = serializers.IntegerField(source='day_turn.index', read_only=True)
+    turn_actor_name = serializers.CharField(source='day_turn.actor.player.name', read_only=True)
 
     # DRF will deserialize this to an ActionType INSTANCE (because queryset is set)
     action_type = serializers.SlugRelatedField(
@@ -38,6 +51,9 @@ class LogSerializer(serializers.ModelSerializer):
             'round_number',
             'details',
             'created_at',
+            'day_turn',
+            'turn_index',
+            'turn_actor_name',
         ]
         read_only_fields = ('created_at', 'player_name')
 
@@ -117,6 +133,21 @@ class LogSerializer(serializers.ModelSerializer):
             if at is None:
                 raise drf.ValidationError(f"Unknown action_type: {action_type_val}")
             attrs['action_type'] = at  # set the instance back so create() gets an instance
+            
+        dt_id = (self.initial_data or {}).get('day_turn')
+        if dt_id:
+            try:
+                dt = DayTurn.objects.get(pk=dt_id)
+            except DayTurn.DoesNotExist:
+                raise drf.ValidationError("Invalid day_turn id")
+            if dt.game_id != game.id or dt.round_number != attrs.get('round_number'):
+                raise drf.ValidationError("day_turn must match this game and current day")
+            if dt.closed_at:
+                raise drf.ValidationError("day_turn is already closed")
+            # enforce: logs in a turn must be by the actor of that turn
+            if str(dt.actor_id) != str(getattr(performer, 'id', None)):
+                raise drf.ValidationError("This turn belongs to another actor")
+            attrs['day_turn'] = dt
 
         cfg = at.config or {}
 
@@ -237,98 +268,162 @@ class LogSerializer(serializers.ModelSerializer):
         if not allow_self and any(int(gid) == int(performer.id) for gid in gp_ids):
             raise drf.ValidationError("Performer cannot target themselves for this action")
 
-        # ---- Claim / Will / Defense-extended checks ----
-        def _coerce_id(val):
-            if isinstance(val, int):
-                return val
-            if isinstance(val, str):
-                try:
-                    return int(val)
-                except ValueError:
-                    pass
-            if isinstance(val, GPModel):
-                return int(val.pk)
-            if isinstance(val, dict):
-                for key in ("id", "pk", "value"):
-                    if key in val:
-                        return _coerce_id(val[key])
-            raise drf.ValidationError("Expected a GamePlayer id")
-
-        def _coerce_id_list(val):
-            if val is None or val == "":
-                return []
-            if isinstance(val, (list, tuple)):
-                return [ _coerce_id(x) for x in val ]
-            # single value -> wrap
-            return [ _coerce_id(val) ]
-
+        # --- Claim / Will / Defense details (final) ---
         if isinstance(details_schema, dict):
-            # Claim: role must be present and one of game roles
-            role_req = details_schema.get('role_slug', {}).get('required', False)
-            if role_req:
+            from rest_framework import serializers as drf
+            from games.models import GamePlayer
+
+            # Helpers
+            def _as_id_list(val):
+                """
+                Normalize a possibly-empty single value or list/tuple into a list of ints.
+                Accepts '', None -> [].
+                """
+                if val is None:
+                    return []
+                if isinstance(val, (list, tuple)):
+                    out = []
+                    for v in val:
+                        s = str(v).strip()
+                        if not s:
+                            continue
+                        try:
+                            out.append(int(s))
+                        except ValueError:
+                            raise drf.ValidationError("IDs must be integers")
+                    return out
+                s = str(val).strip()
+                if not s:
+                    return []
+                try:
+                    return [int(s)]
+                except ValueError:
+                    raise drf.ValidationError("IDs must be integers")
+
+            def _validate_player_ids(id_list, fieldname):
+                """Ensure all ids belong to this game."""
+                if not id_list:
+                    return
+                qs = GamePlayer.objects.filter(id__in=id_list, game_id=game.id)
+                if qs.count() != len(set(id_list)):
+                    raise drf.ValidationError(f"Some {fieldname} are not players in this game")
+
+            # Build allowed role keys (slugs/names) from roles present in *this* game.
+            # Works whether GamePlayer.role is a FK to Role or a CharField.
+            allowed_role_keys = set()       # lowercase keys
+            canonical_by_lower = {}         # lower -> canonical slug/name
+
+            try:
+                # Prefer Role model if available and linked via GamePlayer
+                from roles.models import Role  # type: ignore
+                roles_qs = Role.objects.filter(gameplayer__game_id=game.id).distinct()
+                for row in roles_qs.values('slug', 'name'):
+                    for key in (row.get('slug'), row.get('name')):
+                        if key:
+                            lower = str(key).lower()
+                            allowed_role_keys.add(lower)
+                            # Prefer slug as canonical if present, else name
+                            canonical_by_lower.setdefault(lower, row.get('slug') or row.get('name'))
+            except Exception:
+                # Fallback: derive from players' role field (string)
+                for val in (GamePlayer.objects
+                            .filter(game_id=game.id)
+                            .values_list('role', flat=True)
+                            .distinct()):
+                    if val:
+                        sval = str(val)
+                        lower = sval.lower()
+                        allowed_role_keys.add(lower)
+                        canonical_by_lower.setdefault(lower, sval)
+
+            # -------- CLAIM (role only) ----------
+            # If schema marks role_slug as required, enforce it and canonicalize
+            role_req = bool(details_schema.get('role_slug', {}).get('required', False))
+            if role_req and (attrs.get('action_type') == 'claim' or at.slug == 'claim' or True):
                 role_val = details.get('role_slug') or details.get('role')
-                if not role_val:
+                if not role_val or not str(role_val).strip():
                     raise drf.ValidationError("role_slug is required for this action")
-                allowed = list(
-                    GPModel.objects.filter(game_id=game.id)
-                    .exclude(role__isnull=True).exclude(role__exact="")
-                    .values_list('role', flat=True).distinct()
-                )
-                if allowed and not any(str(role_val).lower() == str(r).lower() for r in allowed):
-                    raise drf.ValidationError(
-                        f"role_slug must be one of the game roles: {', '.join(sorted(set(map(str, allowed))))}"
-                    )
-                details['role_slug'] = role_val
+                key = str(role_val).lower()
+                if allowed_role_keys and key not in allowed_role_keys:
+                    raise drf.ValidationError("role_slug must be one of the roles present in this game")
+                # Canonicalize (prefer slug if we had it)
+                details['role_slug'] = canonical_by_lower.get(key, str(role_val))
                 attrs['details'] = details
 
-            # Will: allow multi targets/covers + optional claim_role
-            will_keys = [k for k in ('target', 'cover', 'claim_role') if k in details_schema]
-            if will_keys:
-                t_list = _coerce_id_list(details.get('target'))
-                c_list = _coerce_id_list(details.get('cover'))
-                # Optional membership checks
-                if t_list:
-                    qs = GPModel.objects.filter(id__in=t_list, game_id=game.id)
-                    if qs.count() != len(t_list):
-                        raise drf.ValidationError("Will.target contains invalid players")
-                if c_list:
-                    qs = GPModel.objects.filter(id__in=c_list, game_id=game.id)
-                    if qs.count() != len(c_list):
-                        raise drf.ValidationError("Will.cover contains invalid players")
-                details['target'] = t_list
-                details['cover'] = c_list
-                
-                # Optional pruning (keeps details compact)
-                if not t_list:
-                    details.pop('target', None)
-                if not c_list:
-                    details.pop('cover', None)
-                if not details.get('claim_role'):
-                    details.pop('claim_role', None)
-                    
+            # -------- WILL (many targets, many covers, optional claim role) ----------
+            # We allow empty WILL logs. Accept both single values and arrays.
+            if any(k in details_schema for k in ('target', 'targets', 'cover', 'covers', 'claim_role', 'will_claim_role')):
+                # normalize to lists
+                will_targets = []
+                will_covers = []
+
+                # accept multiple possible keys from UI/schema
+                for k in ('will_targets', 'targets', 'target'):
+                    if k in details:
+                        will_targets = _as_id_list(details.get(k))
+                        break
+                for k in ('will_covers', 'covers', 'cover'):
+                    if k in details:
+                        will_covers = _as_id_list(details.get(k))
+                        break
+
+                # validate player membership (but allow empty lists)
+                _validate_player_ids(will_targets, "will targets")
+                _validate_player_ids(will_covers, "will covers")
+
+                # optional role in will, validate like Claim
+                will_role = details.get('will_claim_role') or details.get('claim_role')
+                if will_role and str(will_role).strip():
+                    key = str(will_role).lower()
+                    if allowed_role_keys and key not in allowed_role_keys:
+                        raise drf.ValidationError("claim_role in will must be a role present in this game")
+                    details['claim_role'] = canonical_by_lower.get(key, str(will_role))
+                else:
+                    # normalize empties
+                    details['claim_role'] = None
+
+                # store canonical arrays, even if empty (allowed)
+                details['targets'] = will_targets
+                details['covers'] = will_covers
                 attrs['details'] = details
 
-            # Defense extended: coverer (single), targets (multi), covered (multi)
-            if any(k in details_schema for k in ('coverer', 'targets', 'covered')):
-                if 'coverer' in details_schema and details.get('coverer'):
-                    details['coverer'] = _coerce_id(details['coverer'])
-                    if not GPModel.objects.filter(id=details['coverer'], game_id=game.id).exists():
-                        raise drf.ValidationError("Defense.coverer must be a player in this game")
-                if 'targets' in details_schema and details.get('targets') is not None:
-                    tlist = _coerce_id_list(details.get('targets'))
-                    if tlist:
-                        qs = GPModel.objects.filter(id__in=tlist, game_id=game.id)
-                        if qs.count() != len(tlist):
-                            raise drf.ValidationError("Defense.targets contains invalid players")
-                    details['targets'] = tlist
-                if 'covered' in details_schema and details.get('covered') is not None:
-                    clist = _coerce_id_list(details.get('covered'))
-                    if clist:
-                        qs = GPModel.objects.filter(id__in=clist, game_id=game.id)
-                        if qs.count() != len(clist):
-                            raise drf.ValidationError("Defense.covered contains invalid players")
-                    details['covered'] = clist
+            # -------- DEFENSE (three parts, like will) ----------
+            # Expect optional: coverer (single), defense_targets (list), defense_covered (list).
+            # Allow multiple key aliases for flexibility.
+            if any(k in details_schema for k in ('defense_coverer', 'coverer', 'defense_targets', 'defense_covered')):
+                # Single coverer
+                coverer = None
+                for k in ('defense_coverer', 'coverer'):
+                    if k in details:
+                        ids = _as_id_list(details.get(k))
+                        coverer = ids[0] if ids else None
+                        break
+                if coverer is not None:
+                    _validate_player_ids([coverer], "defense coverer")
+
+                # Targets (list)
+                defense_targets = []
+                for k in ('defense_targets', 'targets'):
+                    if k in details:
+                        defense_targets = _as_id_list(details.get(k))
+                        break
+                _validate_player_ids(defense_targets, "defense targets")
+
+                # Covered (list)
+                defense_covered = []
+                for k in ('defense_covered', 'covered'):
+                    if k in details:
+                        defense_covered = _as_id_list(details.get(k))
+                        break
+                _validate_player_ids(defense_covered, "defense covered players")
+
+                # Save normalized shapes (empties allowed)
+                details['defense_coverer'] = coverer
+                details['defense_targets'] = defense_targets
+                details['defense_covered'] = defense_covered
                 attrs['details'] = details
+        # --- end Claim / Will / Defense details ---
+
 
         return attrs
 

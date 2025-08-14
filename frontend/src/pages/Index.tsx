@@ -38,9 +38,9 @@ const Index = () => {
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex justify-between items-center">
             <div className="text-center flex-1">
-              <h1 className="text-4xl font-bold text-foreground mb-2">Game Logger</h1>
+              <h1 className="text-4xl font-bold text-foreground mb-2">Omerta Group</h1>
               <p className="text-xl text-muted-foreground">
-                Track and analyze your game sessions
+                Gaming & Learning
               </p>
             </div>
             <div className="flex items-center gap-2">
