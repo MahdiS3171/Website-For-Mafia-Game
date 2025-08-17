@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Users, Clock, ArrowRight } from "lucide-react";
-import { startTurn, endTurn, getCurrentTurn } from "../lib/api";
+import { startTurn, endTurn, getCurrentTurn, getGames, getPhasesByGame } from "../lib/api";
 import DynamicActionDialog from "@/components/DynamicActionDialog";
 import type { ActionTypeDTO, GamePlayerResponse } from "../types";
 import { Trash2 } from "lucide-react";
@@ -56,6 +56,7 @@ const GameSession = () => {
   const [deleteLogId, setDeleteLogId] = useState<string | number | null>(null);
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [winnerChoice, setWinnerChoice] = useState<"Mafia" | "Citizen">("Mafia");
+  const [pendingWill, setPendingWill] = useState<number | null>(null);
 
   // ActionType reference for 'will'
   const willAction = useMemo(
@@ -78,7 +79,7 @@ const GameSession = () => {
 
     setChosenAction(null);
     setActionDialogOpen(false);
-    // setActor(null);
+    setSelectedPlayer(null);
 
     setShowElimination(false);
     setToEliminate([]);
@@ -129,6 +130,7 @@ const GameSession = () => {
     setChosenAction(null);
     setActionDialogOpen(false);
     setOpenTurn(null);
+    setSelectedPlayer(null);
   }, [currentPhase]);
 
   useEffect(() => {
@@ -329,7 +331,6 @@ const GameSession = () => {
         // mark them terminated first
         await terminatePlayers(gameId, eliminatedIds);
       }
-
       // If there are eliminations and we have the Will action configured,
       // start the Will wizard (one-by-one), THEN advance phase.
       if (eliminatedIds.length > 0 && willAction) {
@@ -349,12 +350,12 @@ const GameSession = () => {
           setChosenAction(willAction);
           setActionDialogOpen(true);
           setShowElimination(false);
-          return; // important: do NOT advance phase yet
+          return;
         }
       }
 
-      // No will to collect -> advance immediately
       await doAdvancePhase();
+      
     } catch (e: any) {
       const msg = e?.response?.data ? JSON.stringify(e.response.data) : e?.message || String(e);
       toast({

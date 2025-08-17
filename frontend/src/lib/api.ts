@@ -9,7 +9,9 @@ import {
   GamePhaseResponse,
   DaySpeechResponse,
   PlayerWithStats,
+  GameResults,
 } from "../types";
+
 
 import type { ActionResponse } from "../types";
 import type { ListResult, ActionTypeDTO } from "../types";
@@ -217,6 +219,44 @@ export const listPlayersWithStats = () =>
 // Update player (name / nickname)
 export const updatePlayer = (id: string | number, payload: { name?: string; nickname?: string | null }) =>
   api.patch(`/players/${id}/`, payload);
+
+
+export type GameResultPlayer = {
+  id: number | string;
+  seat_number: number;
+  name: string;
+  role_name: string | null;
+  is_mafia: boolean | null;
+  is_eliminated: boolean;
+};
+
+export type GameResultLog = {
+  id: number | string;
+  game_player: number | string;
+  actor_seat: number;
+  actor_name: string;
+  action_slug: string;
+  action_name: string;
+  phase: "day" | "night";
+  round_number: number;
+  turn_index?: number | null;
+  targets: { id: number | string; seat: number; name: string; tag?: string | null }[];
+  details: Record<string, any>;
+  created_at: string;
+};
+
+export type GameResultPayload = {
+  game: { id: number | string; title: string; current_phase: string; round_number: number; created_at: string; ended_at: string | null; winner?: string | null };
+  players: GameResultPlayer[];
+  logs: GameResultLog[];
+};
+
+export const getGameResult = (id: string | number) =>
+  api.get<GameResultPayload>(`/games/${id}/result/`);
+
+export const getGameResults = (id: string | number) =>
+  api.get<GameResults>(`/games/${id}/results/`);
+
 
 
 

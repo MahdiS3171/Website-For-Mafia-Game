@@ -53,7 +53,7 @@ ACTIONS = [
     {
         "slug": "dialogue", "name": "Dialogue", "phase": "day",
         "config": {
-            "requires_targets": True, "allow_self": False,
+            "requires_targets": True, "allow_self": False, "single_per_tag": True,
             "tags": [{"key": "target", "label": "Dialogue partner"}],
         },
     },
@@ -77,7 +77,7 @@ ACTIONS = [
         "slug": "defense", "name": "Cover for Defense", "phase": "day",
         "config": {
             "requires_targets": False, "allow_self": False,
-            "details_schema": { "coverer": {"required": True}, "targets": {"required": False}, "covered": {"required": False} },
+            "details_schema": { "covering": {"required": True}, "targets": {"required": False}, "covered": {"required": False} },
         },
     },
     {
@@ -114,42 +114,42 @@ ACTIONS = [
     {
         "slug": "no_faces_choice", "name": "No Faces Choice", "phase": "night",
         "config": {
-            "requires_targets": True, "allow_self": False,
+            "requires_targets": True, "allow_self": False, "single_per_tag": True,
             "tags": [{"key": "target", "label": "Player with Ability"}],
         },
     },
     {
         "slug": "boozers_shot", "name": "Boozer's Shot", "phase": "night",
         "config": {
-            "requires_targets": True, "allow_self": False,
+            "requires_targets": True, "allow_self": False, "single_per_tag": True,
             "tags": [{"key": "target", "label": "Boozed Player"}],
         },
     },
     {
         "slug": "mafia_kill", "name": "Mafia Kill", "phase": "night",
         "config": {
-            "requires_targets": True, "allow_self": False,
+            "requires_targets": True, "allow_self": False, "single_per_tag": True,
             "tags": [{"key": "target", "label": "Kill"}],
         },
     },
     {
         "slug": "punished", "name": "Punished", "phase": "night",
         "config": {
-            "requires_targets": True, "allow_self": False,
+            "requires_targets": True, "allow_self": False, "single_per_tag": True,
             "tags": [{"key": "target", "label": "Punished"}],
         },
     },
     {
         "slug": "secured", "name": "Secured", "phase": "night",
         "config": {
-            "requires_targets": True, "allow_self": False,
+            "requires_targets": True, "allow_self": True, "single_per_tag": True,
             "tags": [{"key": "target", "label": "Secured"}],
         },
     },
     {
         "slug": "killer_target", "name": "Killer Target", "phase": "night",
         "config": {
-            "requires_targets": True, "allow_self": False,
+            "requires_targets": True, "allow_self": False, "single_per_tag": True,
             "tags": [
                 {"key": "mafia_suggest", "label": "Mafia suggest"},
                 {"key": "city_saviour", "label": "Random Citizen"},
@@ -161,14 +161,14 @@ ACTIONS = [
     {
         "slug": "snipers_shot", "name": "Sniper's Shot", "phase": "night",
         "config": {
-            "requires_targets": True, "allow_self": False,
+            "requires_targets": True, "allow_self": False, "single_per_tag": True,
             "tags": [{"key": "target", "label": "Sniper's shot"}],
         },
     },
     {
         "slug": "doctors_save", "name": "Doctor's Save", "phase": "night",
         "config": {
-            "requires_targets": True, "allow_self": True,
+            "requires_targets": True, "allow_self": True, "single_per_tag": True,
             "tags": [
                 {"key": "doctor_choice", "label": "Doctor’s choice"},
                 {"key": "backup", "label": "Backup choice"},

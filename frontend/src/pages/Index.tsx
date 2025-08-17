@@ -137,7 +137,7 @@ const Index = () => {
 
         {/* Features Section */}
         <div className="mt-16">
-          <h2 className="text-3xl font-bold text-center mb-12">Features</h2>
+          <h2 className="text-3xl font-bold text-center mb-12">Instructions</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="text-center">
               <div className="w-12 h-12 bg-secondary rounded-full flex items-center justify-center mx-auto mb-4">
@@ -145,7 +145,7 @@ const Index = () => {
               </div>
               <h3 className="text-xl font-semibold mb-2">Player Management</h3>
               <p className="text-muted-foreground">
-                Easily add and manage players with their roles and seat assignments
+                Easily add and manage players in the Add Player page and add them to games in the Create Game page
               </p>
             </div>
             <div className="text-center">
@@ -154,7 +154,7 @@ const Index = () => {
               </div>
               <h3 className="text-xl font-semibold mb-2">Action Logging</h3>
               <p className="text-muted-foreground">
-                Track every action and interaction during gameplay sessions
+                You can track every action and interaction during gameplay sessions by going to the All Games page and finding the desired game
               </p>
             </div>
             <div className="text-center">
@@ -163,7 +163,7 @@ const Index = () => {
               </div>
               <h3 className="text-xl font-semibold mb-2">Performance Analysis</h3>
               <p className="text-muted-foreground">
-                Detailed statistics and performance metrics for every player
+                Detailed statistics and performance metrics for every player is present in the Results Page
               </p>
             </div>
           </div>

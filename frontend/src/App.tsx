@@ -14,6 +14,7 @@ import Results from "./pages/Results";
 import GameSession from "./pages/GameSession";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import ResultsDetail from "./pages/ResultsDetail";
 
 const queryClient = new QueryClient();
 
@@ -26,7 +27,7 @@ const App = () => (
         <Routes>
           {/* Public routes */}
           <Route path="/results" element={<Results />} />
-          <Route path="/results/:gameId" element={<Results />} />
+          <Route path="/games/:gameId/results" element={<ResultsDetail />} />
 
           {/* Login route (only for non-authenticated) */}
           <Route

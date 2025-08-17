@@ -181,3 +181,87 @@ export type PlayerWithStats = {
   wins: number;
   win_rate: number;
 };
+
+
+// src/types/results.ts  Result related types
+
+export type PhaseType = "day" | "night";
+export type WinnerSide = "mafia" | "citizen" | null;
+
+export interface ResultPlayerPerformanceCitizen {
+  correct_targets_rate?: number;            // 0..1
+  successful_contribution_rate?: number;    // 0..1
+  correct_covers_rate?: number;             // 0..1
+  successful_acts_count?: number;           // integer
+}
+
+export interface ResultPlayerPerformanceMafia {
+  pushes_count?: number;                    // integer
+  city_trust_rate?: number;                 // 0..1
+  successful_claim?: boolean;
+}
+
+export type ResultPlayerPerformance =
+  Partial<ResultPlayerPerformanceCitizen & ResultPlayerPerformanceMafia>;
+
+export interface ResultPlayer {
+  player_id: number;
+  name: string;
+  seat_number: number | null;
+  role_name: string | null;
+  overall_win_rate: number;                 // 0..1
+  terminated_round: number | null;
+  terminated_phase: PhaseType | null;
+  performance: ResultPlayerPerformance;
+}
+
+/** Timeline payloads (discriminated union) */
+export interface TimelineFinalistCandidate {
+  gp_id: number;
+  player_name: string;
+  count: number;
+}
+export interface TimelineFinalistsPayload {
+  threshold: number;
+  alive: number;
+  candidates: TimelineFinalistCandidate[];
+}
+export type TerminationCause =
+  | "voting"
+  | "godfather"
+  | "killer"
+  | "sniper"
+  | "kicked_out"
+  | "citizen_fire";
+
+export interface TimelineTerminationPayload {
+  gp_id: number;
+  player_name: string;
+  cause: TerminationCause;
+  second_vote_counts?: { gp_id: number; player_name: string; count: number }[];
+}
+
+export interface TimelineClaimPayload {
+  gp_id: number;
+  player_name: string;
+  role_claimed: string | null;
+}
+
+export type TimelineEvent =
+  | { phase_type: PhaseType; round_number: number; kind: "finalists"; payload: TimelineFinalistsPayload }
+  | { phase_type: PhaseType; round_number: number; kind: "termination"; payload: TimelineTerminationPayload }
+  | { phase_type: PhaseType; round_number: number; kind: "claim"; payload: TimelineClaimPayload };
+
+export interface GameResults {
+  meta: {
+    game_id: number;
+    title: string;
+    player_count: number;
+    winner: WinnerSide;
+    created_at: string | null;
+    ended_at: string | null;
+  };
+  players: ResultPlayer[];
+  timeline: TimelineEvent[];
+  links: { full_log: string };
+}

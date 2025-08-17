@@ -10,6 +10,8 @@ from players.models import Player
 from roles.models import Role
 from django.utils import timezone
 from logs.models import DayTurn
+from .services.results import build_game_results
+from .serializers import GameResultsSerializer
 
 # === Game ViewSet ===
 class GameViewSet(viewsets.ModelViewSet):
@@ -144,6 +146,23 @@ class GameViewSet(viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=400)
 
         return Response({"ok": True}, status=201)
+    
+    @action(detail=True, methods=['get'], url_path='results')
+    def results(self, request, pk=None):
+        game = self.get_object()
+
+        # Optional: only allow results for completed games
+        if getattr(game, "is_active", False):
+            return Response(
+                {"detail": "Game is not completed yet."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        summary = build_game_results(game.id)
+        data = GameResultsSerializer(summary).data
+        return Response(data, status=status.HTTP_200_OK)
+
+
 
 # === Game Player ViewSet (optional nested endpoint) ===
 class GamePlayerViewSet(viewsets.ModelViewSet):
@@ -157,6 +176,8 @@ class GamePlayerViewSet(viewsets.ModelViewSet):
         if game_id:
             queryset = queryset.filter(game_id=game_id)
         return queryset
+
+
 
 
 # === Game Role ViewSet (optional nested endpoint) ===

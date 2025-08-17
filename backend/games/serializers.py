@@ -107,3 +107,26 @@ class GameRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = GameRole
         fields = ['id', 'game', 'role', 'count']
+
+
+class ResultPlayerRowSerializer(serializers.Serializer):
+    player_id = serializers.IntegerField()
+    name = serializers.CharField()
+    seat_number = serializers.IntegerField(allow_null=True)
+    role_name = serializers.CharField(allow_null=True)
+    overall_win_rate = serializers.FloatField()
+    terminated_round = serializers.IntegerField(allow_null=True)
+    terminated_phase = serializers.CharField(allow_null=True)
+    performance = serializers.DictField(child=serializers.JSONField())
+
+class TimelineEventSerializer(serializers.Serializer):
+    phase_type = serializers.CharField()     # 'day' | 'night' (we’ll fill later)
+    round_number = serializers.IntegerField()
+    kind = serializers.CharField()           # 'finalists'|'termination'|'claim'
+    payload = serializers.DictField(child=serializers.JSONField())
+
+class GameResultsSerializer(serializers.Serializer):
+    meta = serializers.DictField(child=serializers.JSONField())
+    players = ResultPlayerRowSerializer(many=True)
+    timeline = TimelineEventSerializer(many=True)
+    links = serializers.DictField(child=serializers.CharField())
