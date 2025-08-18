@@ -54,7 +54,7 @@ export default function DynamicActionDialog({
   // “Cover for defense” (extended defense)
   const isDefenseExtended =
     !!cfg?.details_schema &&
-    ("coverer" in cfg.details_schema || "targets" in cfg.details_schema || "covered" in cfg.details_schema);
+    ("covering" in cfg.details_schema || "targets" in cfg.details_schema || "covered" in cfg.details_schema);
 
   // Show players grid only if the action needs targets and it’s not claim
   const showTargetsGrid = !!cfg?.requires_targets && !isClaim && !isWill && !isDefenseExtended;
@@ -83,7 +83,7 @@ export default function DynamicActionDialog({
   const [willClaimRole, setWillClaimRole] = useState<string>("");
 
   // Defense extended
-  const [defCoverer, setDefCoverer] = useState<string | number | undefined>(undefined);
+  const [defCovering, setDefCovering] = useState<string | number | undefined>(undefined);
   const [defTargets, setDefTargets] = useState<(string | number)[]>([]);
   const [defCovered, setDefCovered] = useState<(string | number)[]>([]);
 
@@ -109,7 +109,7 @@ export default function DynamicActionDialog({
       setWillTargets([]);
       setWillCovers([]);
       setWillClaimRole("");
-      setDefCoverer(undefined);
+      setDefCovering(undefined);
       setDefTargets([]);
       setDefCovered([]);
       setBucketTargets({ __flat__: [] });
@@ -180,9 +180,9 @@ export default function DynamicActionDialog({
       return { details, targets: [] }; // single log, no explicit targets array
     }
 
-    // --- DEFENSE EXTENDED (coverer single, targets multi, covered multi)
+    // --- DEFENSE EXTENDED (covering single, targets multi, covered multi)
     if (isDefenseExtended) {
-      if (defCoverer) details.coverer = String(defCoverer);
+      if (defCovering) details.covering = String(defCovering);
       if (defTargets?.length) details.targets = defTargets.map(String);
       if (defCovered?.length) details.covered = defCovered.map(String);
       return { details, targets: [] };
@@ -298,9 +298,9 @@ export default function DynamicActionDialog({
                   {players.map((p) => (
                     <Badge
                       key={`def-cov-${p.id}`}
-                      variant={String(defCoverer) === String(p.id) ? "default" : "outline"}
+                      variant={String(defCovering) === String(p.id) ? "default" : "outline"}
                       className="cursor-pointer"
-                      onClick={() => setDefCoverer(String(p.id) === String(defCoverer) ? undefined : p.id)}
+                      onClick={() => setDefCovering(String(p.id) === String(defCovering) ? undefined : p.id)}
                     >
                       {p.seat_number}. {p.player}
                     </Badge>

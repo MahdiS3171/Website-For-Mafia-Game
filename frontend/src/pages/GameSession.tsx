@@ -502,14 +502,14 @@ const GameSession = () => {
       );
     }
 
-    // 4) Defense (coverer + targets + covered; optional)
+    // 4) Defense (covering + targets + covered; optional)
     if (slug === "defense") {
-      const coverer = d?.defense_coverer;
+      const covering = d?.defense_covering;
       const defTargets = Array.isArray(d?.defense_targets) ? d.defense_targets : [];
       const defCovered = Array.isArray(d?.defense_covered) ? d.defense_covered : [];
       return (
         <div className="space-y-1">
-          <div><span className="font-medium">Covering player:</span> {coverer ? fmtList([coverer]) : <em>—</em>}</div>
+          <div><span className="font-medium">Covering player:</span> {covering ? fmtList([covering]) : <em>—</em>}</div>
           <div><span className="font-medium">Def. targets:</span> {defTargets.length ? fmtList(defTargets) : <em>—</em>}</div>
           <div><span className="font-medium">Covered:</span> {defCovered.length ? fmtList(defCovered) : <em>—</em>}</div>
         </div>

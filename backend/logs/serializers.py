@@ -388,18 +388,18 @@ class LogSerializer(serializers.ModelSerializer):
                 attrs['details'] = details
 
             # -------- DEFENSE (three parts, like will) ----------
-            # Expect optional: coverer (single), defense_targets (list), defense_covered (list).
+            # Expect optional: covering (single), defense_targets (list), defense_covered (list).
             # Allow multiple key aliases for flexibility.
-            if any(k in details_schema for k in ('defense_coverer', 'coverer', 'defense_targets', 'defense_covered')):
-                # Single coverer
-                coverer = None
-                for k in ('defense_coverer', 'coverer'):
+            if any(k in details_schema for k in ('defense_covering', 'covering', 'defense_targets', 'defense_covered')):
+                # Single covering
+                covering = None
+                for k in ('defense_covering', 'covering'):
                     if k in details:
                         ids = _as_id_list(details.get(k))
-                        coverer = ids[0] if ids else None
+                        covering = ids[0] if ids else None
                         break
-                if coverer is not None:
-                    _validate_player_ids([coverer], "defense coverer")
+                if covering is not None:
+                    _validate_player_ids([covering], "defense covering")
 
                 # Targets (list)
                 defense_targets = []
@@ -418,7 +418,7 @@ class LogSerializer(serializers.ModelSerializer):
                 _validate_player_ids(defense_covered, "defense covered players")
 
                 # Save normalized shapes (empties allowed)
-                details['defense_coverer'] = coverer
+                details['defense_covering'] = covering
                 details['defense_targets'] = defense_targets
                 details['defense_covered'] = defense_covered
                 attrs['details'] = details

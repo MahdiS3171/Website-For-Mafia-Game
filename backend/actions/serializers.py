@@ -75,8 +75,8 @@ class ActionSerializer(serializers.ModelSerializer):
         derive_n_from_targets = bool(cfg.get('derive_n_from_targets', False)) or action_type_slug in ("first_vote", "second_vote")
 
         # ----- Phase guard -----
-        if phase and at.phase and phase != at.phase:
-            raise drf.ValidationError(f"This action is only available in {at.phase} phase")
+        # if phase and at.phase and phase != at.phase:
+        #     raise drf.ValidationError(f"This action is only available in {at.phase} phase")
 
         # ----- Targets container must be a list -----
         if not isinstance(targets, list):
