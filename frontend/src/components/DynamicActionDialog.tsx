@@ -93,6 +93,9 @@ export default function DynamicActionDialog({
     __flat__: [],
   });
 
+  const [pickedTargets, setPickedTargets] = useState<string[]>([]);
+  const [pickedCovers, setPickedCovers] = useState<string[]>([]);
+
   const roleOptions = useMemo(
     () =>
       (Array.isArray(claimRoles) ? claimRoles : []).map((r: any) =>
@@ -119,7 +122,14 @@ export default function DynamicActionDialog({
   const actorId = actor?.id;
 
   const title = useMemo(() => {
-    if (isWill) return "Will";
+    if (isWill) {
+      const name =
+        typeof actor?.player === "string"
+          ? actor.player
+          : (actor as any)?.player?.name ?? "Player";
+      const seat = (actor as any)?.seat_number;
+      return `Will — ${name}${seat != null ? ` (#${seat})` : ""}`;
+    }
     if (isDefenseExtended) return action.name;
     if (tags.length > 0) return action.name;
     if (cfg.params?.k && cfg.params?.n)
@@ -172,12 +182,15 @@ export default function DynamicActionDialog({
       return { details, targets: [] };
     }
 
-    // --- WILL (multi targets & covers + dropdown role)
+    // --- WILL (multi targets & covers + optional claimed role)
     if (isWill) {
-      details.target = (willTargets ?? []).map(String);
-      details.cover = (willCovers ?? []).map(String);
+      // Use plural keys to match the serializer and your renderDetails()
+      details.targets = (willTargets ?? []).map((x) => Number(x));
+      details.covers  = (willCovers  ?? []).map((x) => Number(x));
       if (willClaimRole) details.claim_role = willClaimRole;
-      return { details, targets: [] }; // single log, no explicit targets array
+
+      // IMPORTANT: Will does not accept top-level targets[]
+      return { details, targets: [] };
     }
 
     // --- DEFENSE EXTENDED (covering single, targets multi, covered multi)
@@ -192,18 +205,40 @@ export default function DynamicActionDialog({
     if (showKInput) details.k = k;
     if (showNInput) details.n = n; // votes hide this; server derives n
 
-    // --- Tagged picks (terror, killer, etc.)
+    // --- Tagged picks (terror, killer, target/cover, etc.)
     if (tags.length > 0) {
       for (const tag of tags) {
-        const arr = bucketTargets[tag.key] ?? [];
-        const first = arr[0]; // one per tag (UI enforces if singlePerTag)
-        if (first) targets.push({ target: first, tag: tag.key });
+        // all selected ids for this tag
+        const arr = (bucketTargets[tag.key] ?? []).map(String);
+
+        if (arr.length === 0) continue;
+
+        // if the action enforces single-per-tag (e.g., terror), keep one; else include all
+        const take = singlePerTag ? arr.slice(0, 1) : arr;
+
+        // push ONE entry per selected id → lets GameSession fan-out into N logs
+        for (const id of take) {
+          targets.push({ target: id, tag: tag.key });
+        }
+
+        // mirror into details for robustness / alternative extractors
+        if (tag.key === "target") {
+          details.targets = (details.targets ?? []).concat(take.map((x) => Number(x)));
+        }
+        if (tag.key === "cover") {
+          details.covers = (details.covers ?? []).concat(take.map((x) => Number(x)));
+        }
       }
     } else {
-      // flat bucket (siding / votes / generic multi)
-      const list = bucketTargets.__flat__ ?? [];
+      // flat bucket (generic multi)
+      const list = (bucketTargets.__flat__ ?? []).map(String);
       for (const pid of list) targets.push({ target: pid });
+      // mirror for robustness (avoid touching for votes; n is derived below)
+      if (!isVote && !(cfg as any)?.derive_n_from_targets) {
+        details.targets = list.map((x) => Number(x));
+      }
     }
+
 
     // --- Votes: always set n = number of picks (harmless if server already derives)
     if (isVote || (cfg as any).derive_n_from_targets) {

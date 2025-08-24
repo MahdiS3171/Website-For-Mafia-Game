@@ -64,6 +64,11 @@ const GameSession = () => {
     [actionTypes]
   );
 
+  const dialogKey = useMemo(
+    () => `${chosenAction?.slug ?? "none"}-${selectedPlayer ?? "none"}-${processingWills ? "wq" : "nw"}`,
+    [chosenAction?.slug, selectedPlayer, processingWills]
+  );
+
   // Roles in this game (for claim & will dropdown)
 
   // re-usable: advance phase and refresh
@@ -237,6 +242,56 @@ const GameSession = () => {
     setActionDialogOpen(true);
   };
 
+  // Normalize lots of possible shapes into a string[] of GamePlayer IDs
+  const extractIds = (val: any): string[] => {
+    if (val == null) return [];
+    if (Array.isArray(val)) {
+      return val
+        .map(v => (typeof v === "number" ? String(v) : String(v).trim()))
+        .filter(Boolean);
+    }
+    if (typeof val === "string") {
+      // support "1,2,3" or "1 2 3"
+      const s = val.trim();
+      if (!s) return [];
+      const parts = s.includes(",") ? s.split(",") : s.split(/\s+/);
+      return parts.map(x => x.trim()).filter(Boolean);
+    }
+    if (typeof val === "number") return [String(val)];
+    return [];
+  };
+
+  // Pull multi-select picks from details under many likely keys.
+  // For 'target' action, prefer *targets*-like keys; for 'cover', prefer *covers*-like keys.
+  const extractFanOutFromDetails = (details: Record<string, any>, slug: string): string[] => {
+    const d = details || {};
+    const prefIsCover = slug === "cover";
+
+    const targetishKeys = [
+      "targets", "target", "selected", "selected_targets", "selected_ids",
+      "choices", "ids", "values", "k_of_n_selected", "k", "chosen"
+    ];
+    const coverishKeys = [
+      "covers", "cover", "selected_covers", "cover_ids"
+    ];
+
+    const keysToTry = prefIsCover ? [...coverishKeys, ...targetishKeys] : [...targetishKeys, ...coverishKeys];
+
+    for (const k of keysToTry) {
+      const ids = extractIds(d[k]);
+      if (ids.length > 1) return ids;
+    }
+
+    // nothing with >1? still return any single found list so we can compare lengths
+    for (const k of keysToTry) {
+      const ids = extractIds(d[k]);
+      if (ids.length >= 1) return ids;
+    }
+
+    return [];
+  };
+
+
   // Confirm from dialog → create log(s)
   const handleConfirmAction = async ({
     targets,
@@ -250,32 +305,102 @@ const GameSession = () => {
     // Respect separate_per_target if present (fallback to separatePerTarget)
     const cfg = chosenAction.config || {};
     const separatePerTarget =
-      (cfg as any).separate_per_target ?? (cfg as any).separatePerTarget ?? false;
+      ["target", "cover"].includes(chosenAction.slug) ||
+      Boolean((cfg as any).separate_per_target ?? (cfg as any).separatePerTarget);
+    let keepDialogOpen = false;
 
     try {
-      if (separatePerTarget && targets.length > 1) {
-        // one log per picked target (for your fling/target/cover behavior)
-        for (const t of targets) {
-          await createLog({
-            game: gameId!,
-            game_player: (selectedActorObj as any).id,
-            action_type: actionTypeField,
-            targets: [{ target: String(t.target), tag: t.tag }],  // <— wrap in String()
-            phase: currentPhaseLower,
-            round_number: round,
-            details,
-          });
-        }
-      } else {
+      // ===== WILL: send details only, never 'targets' =====
+      if (chosenAction.slug === "will") {
         await createLog({
           game: gameId!,
           game_player: (selectedActorObj as any).id,
-          action_type: actionTypeField,
-          targets: targets.map(x => ({ target: String(x.target), tag: x.tag })), // <— String()
+          action_type: "will",
+          phase: currentPhaseLower,
+          round_number: round,
+          details,                                   // from dialog; contains details.targets/covers
+          ...(openTurn ? { day_turn: openTurn.id } : {}),
+        });
+
+        toast({
+          title: "Action Logged",
+          description: `${chosenAction.name} recorded for ${
+            (selectedActorObj as any).name || (selectedActorObj as any).player
+          }`,
+        });
+
+        const [logsRes, gameRes] = await Promise.all([getLogsByGame(gameId!), getGameDetails(gameId!)]);
+        setLogs(logsRes.data);
+        setPlayers(gameRes.data.players);
+
+        // Chain next will in the queue
+        if (processingWills) {
+          if (willQueue.length > 0) {
+            const [next, ...rest] = willQueue;
+            setWillQueue(rest);
+            setSelectedPlayer(String(next.id));
+            setChosenAction(willAction!);
+            setActionDialogOpen(true);
+            keepDialogOpen = true;
+          } else {
+            setProcessingWills(false);
+            setActionDialogOpen(false);
+            setChosenAction(null);
+            await doAdvancePhase();
+          }
+        }
+        return; // <<< IMPORTANT: don't fall through into target/cover fan-out
+      }
+
+      const defaultTag = chosenAction.slug === "cover" ? "cover" : "target";
+
+      // 1) What the dialog gave us directly (often length === 1)
+      const fromDialog = Array.isArray(targets)
+        ? targets.map(t => ({ target: String(t.target), tag: t.tag ?? defaultTag }))
+        : [];
+
+      // 2) Also inspect details to catch multi-picks that the dialog stored there
+      const idsFromDetails = extractFanOutFromDetails(details, chosenAction.slug);
+      const fromDetails = idsFromDetails.map(id => ({ target: String(id), tag: defaultTag }));
+
+      // 3) Decide the fan-out list
+      const cfg = chosenAction.config || {};
+      const separatePerTarget =
+        ["target", "cover"].includes(chosenAction.slug) ||
+        Boolean((cfg as any).separate_per_target ?? (cfg as any).separatePerTarget);
+
+      // Prefer the longer list between dialog and details paths
+      const fanOut = (fromDialog.length >= fromDetails.length) ? fromDialog : fromDetails;
+
+      if (separatePerTarget && fanOut.length > 1) {
+        // (optional) pretty ordering by seat number
+        fanOut.sort((a: any, b: any) => (seatOf(a.target) ?? 0) - (seatOf(b.target) ?? 0));
+
+        // N separate POSTs, each with day_turn if present
+        for (const t of fanOut) {
+          await createLog({
+            game: gameId!,
+            game_player: (selectedActorObj as any).id,
+            action_type: chosenAction.slug,
+            targets: [{ target: t.target, tag: t.tag }],
+            phase: currentPhaseLower,
+            round_number: round,
+            details,
+            ...(openTurn ? { day_turn: openTurn.id } : {}),
+          });
+        }
+      } else {
+        // single POST (either only one pick, or not configured to split)
+        const toSend = (fromDialog.length ? fromDialog : fromDetails);
+        await createLog({
+          game: gameId!,
+          game_player: (selectedActorObj as any).id,
+          action_type: chosenAction.slug,
+          targets: toSend.map(x => ({ target: x.target, tag: x.tag })),
           phase: currentPhaseLower,
           round_number: round,
           details,
-          ...(openTurn ? { day_turn: openTurn.id } : {}), 
+          ...(openTurn ? { day_turn: openTurn.id } : {}),
         });
       }
 
@@ -286,12 +411,12 @@ const GameSession = () => {
         }`,
       });
 
-      // Refresh data
+      // Refresh
       const [logsRes, gameRes] = await Promise.all([getLogsByGame(gameId!), getGameDetails(gameId!)]);
       setLogs(logsRes.data);
       setPlayers(gameRes.data.players);
 
-      // --- If we're processing Will queue, move to the next actor or advance phase ---
+      // Will queue chaining (unchanged)
       if (processingWills && chosenAction?.slug === "will") {
         if (willQueue.length > 0) {
           const [next, ...rest] = willQueue;
@@ -299,21 +424,24 @@ const GameSession = () => {
           setSelectedPlayer(String(next.id));
           setChosenAction(willAction!);
           setActionDialogOpen(true);
+          keepDialogOpen = true;
         } else {
           setProcessingWills(false);
-          // Now advance phase after collecting all wills
+          setActionDialogOpen(false);
+          setChosenAction(null);
           await doAdvancePhase();
         }
-        return; // prevent the default closing/reset below
+        return;
       }
-
     } catch (e: any) {
       const msg = e?.response?.data ? JSON.stringify(e.response.data) : e?.message || String(e);
       toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
-      // Always close and clear selection after logging
-      setActionDialogOpen(false);
-      setChosenAction(null);
+      // Only close if we are not opening the next Will dialog
+      if (!keepDialogOpen) {
+        setActionDialogOpen(false);
+        setChosenAction(null);
+      }
     }
   };
 
@@ -336,6 +464,7 @@ const GameSession = () => {
       if (eliminatedIds.length > 0 && willAction) {
         const queue = players
           .filter((p: any) => eliminatedIds.includes(String(p.id)))
+          .sort((a: any, b: any) => (a.seat_number ?? 0) - (b.seat_number ?? 0)) // <— seat order
           .map(
             (p: any) =>
               ({ ...p, player: p.name } as any as GamePlayerResponse) // dialog expects .player field
@@ -373,7 +502,7 @@ const GameSession = () => {
       await completeGame(gameId, winnerChoice); // sends exactly "Mafia" or "Citizen"
       toast({ title: "Game Completed", description: `Winner: ${winnerChoice}` });
       setShowEndDialog(false);
-      const RESULTS_PATH = `/results/${gameId}`;
+      const RESULTS_PATH = `/games/${gameId}/results`;
       navigate(RESULTS_PATH);
     } catch (err: any) {
       const description = err?.response?.data ? JSON.stringify(err.response.data) : err?.message || "Failed to end game";
@@ -876,6 +1005,7 @@ const GameSession = () => {
         {/* Dynamic action dialog */}
         {chosenAction && selectedActorObj && (
           <DynamicActionDialog
+            key={dialogKey} 
             open={actionDialogOpen}
             onClose={() => setActionDialogOpen(false)}
             action={chosenAction}

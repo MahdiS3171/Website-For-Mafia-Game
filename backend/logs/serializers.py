@@ -168,9 +168,11 @@ class LogSerializer(serializers.ModelSerializer):
         # vote detection
         is_vote = bool(cfg.get('derive_n_from_targets', False)) or at.slug in ("first_vote", "second_vote")
 
-        # phase guard
+        # phase guard (allow 'will' to be posted in either phase)
         if phase and at.phase and phase != at.phase:
-            raise drf.ValidationError(f"This action is only available in {at.phase} phase")
+            if at.slug != "will":
+                raise drf.ValidationError(f"This action is only available in {at.phase} phase")
+            # else: special-case 'will' — allowed in either phase
 
         # targets must be a list (post-deserialize: list[dict])
         if not isinstance(targets, list):
