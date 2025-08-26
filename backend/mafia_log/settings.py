@@ -24,9 +24,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-)u#te_0lj-cm33&bp!m%i@0@ra%%9ak7j)o$b&%)(pbl^e*#9c'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# CHANGED FOR PRODUCTION ENVIRONMENT
+DEBUG = False
 
-ALLOWED_HOSTS = []
+# FIX: Added your domain to allow incoming HTTP requests.
+ALLOWED_HOSTS = ['django-omerta.chbk.app']
 
 
 # Application definition
@@ -63,6 +65,8 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8080",  # React dev server
+    "https://omerta.liara.run",  # Production URL
+    "https://omertaclub.ir"
 ]
 
 ROOT_URLCONF = 'mafia_log.urls'
@@ -134,6 +138,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# FIX: Added a STATIC_ROOT to tell Django where to collect static files.
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
