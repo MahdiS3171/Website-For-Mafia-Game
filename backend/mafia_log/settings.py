@@ -66,7 +66,8 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8080",  # React dev server
     "https://omerta.liara.run",  # Production URL
-    "https://omertaclub.ir"
+    "https://omertaclub.ir",
+    "http://omertaclub.ir"
 ]
 
 ROOT_URLCONF = 'mafia_log.urls'
@@ -162,3 +163,4 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),   # dev-friendly
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
+
